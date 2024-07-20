@@ -1,0 +1,7 @@
+mlx
+mlx_lm
+numpy
+grpcio
+grpcio-tools
+transformers
+protobuf

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package mlxtensor;
+
+service MLXTensorService {
+  rpc SendTensor (Tensor) returns (TensorResponse) {}
+}
+
+message Tensor {
+  bytes tensor_data = 1;
+  repeated int32 shape = 2;
+  string dtype = 3;
+}
+
+message TensorResponse {
+  bool success = 1;
+  string message = 2;
+  Tensor tensor = 3;
+}
