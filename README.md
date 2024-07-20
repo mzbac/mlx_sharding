@@ -2,6 +2,17 @@
 
 This project demonstrates how to implement pipeline parallelism for large language models using MLX. It includes tools for sharding a model, serving shards across multiple machines, and generating text using the distributed model.
 
+## Demo Video
+
+To see the distributed inference in action, check out our demo video:
+
+[MLX Pipeline Parallelism Inference Demo](https://www.youtube.com/watch?v=AgiqBfpkslI)
+
+**Note on Performance:** In this demo, the inference speed is slower than optimal due to two main factors:
+
+1. Network Bottleneck: The setup is using a WiFi network, which introduces latency in communication between shards.
+2. Hardware Bottleneck: One of the machines used is a low spec Mac M1 Pro, which significantly bottlenecks the whole inference process.
+
 ## Educational Purpose
 
 This repository is designed for educational purposes to illustrate how pipeline parallelism can be implemented in MLX. It provides a basic framework for:
