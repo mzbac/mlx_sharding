@@ -74,8 +74,8 @@ def copy_other_files(src_dir, dst_dir):
 def main():
     parser = argparse.ArgumentParser(
         description="Shard model weights and copy other files")
-    parser.add_argument("--model", type=str,
-                        required=True, help="Name of the model to shard")
+    parser.add_argument("--model", type=str, required=True,
+                        help="Name or path of the model to shard")
     parser.add_argument("--output_dir", type=str, required=True,
                         help="Directory to save sharded weights and other files")
     parser.add_argument("--start_layer", type=int, required=True,
@@ -89,7 +89,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     save_sharded_weights(args.model, args.output_dir,
                          args.start_layer, args.end_layer, args.total_layers)
-    copy_other_files(get_model_path(args.model_name), args.output_dir)
+    copy_other_files(get_model_path(args.model), args.output_dir)
 
 
 if __name__ == "__main__":
