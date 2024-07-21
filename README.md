@@ -47,47 +47,41 @@ Copy the shard directories to their respective machines:
 
 ### 3. Start the Servers
 
-On each remote machine, start a server instance for its respective shard:
-
-Machine 1:
+On each remote machine, start a server instance for its respective shard. For example, to start the server for shard 1:
 
 ```bash
-python -m server.server --model /path/to/shard_1
+python -m server.server --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-1
 ```
 
-Machine 2:
-
-```bash
-python -m server.server --model /path/to/shard_2
-```
-
-Note the IP addresses and ports printed by each server.
+Note the IP address and port printed by the server.
 
 ### 4. Configure the Generate Script
 
-Update `generate.py` with the correct IP addresses and ports for each shard:
+The `generate.py` script accepts command-line arguments for flexibility. Key arguments include:
 
-```python
-channel_1 = grpc.insecure_channel('machine1_ip:port')  # For shard_1
-# Add more channels for additional shards if needed
-```
-
-The generate script uses `shard_0` locally for handling the initial prompt to tensor conversion and tokenization:
-
-```python
-tokenizer = AutoTokenizer.from_pretrained("/path/to/shard_0")
-model = load_model("/path/to/shard_0")
-```
+- `--model`: Specifies the path or name of the model to use (local shard)
+- `--server_address`: Specifies the address of the remote shard server
+- `--prompt`: Sets the prompt for text generation
+- `--max_tokens`: Sets the maximum number of tokens to generate
 
 ### 5. Generate Text
 
-Run the generate script on the local machine:
+Run the generate script on the local machine with the desired arguments. For example:
 
 ```bash
-python generate.py
+python generate.py --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0 --server_address <remote_ip>:<port> --prompt "Your prompt here" --max_tokens 512
 ```
 
-This will use the distributed model to generate text based on the given prompt, with `shard_0` handling the initial processing locally, and `shard_1` and `shard_2` processing on their respective remote machines.
+This command:
+
+- Uses the local shard `mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0`
+- Connects to a remote shard server at `<remote_ip>:<port>` (replace with the actual IP address and port of your remote server)
+- Generates text based on the given prompt
+- Limits the generation to a maximum of 512 tokens
+
+The specified model (shard-0) handles the initial processing locally, while the remote shard (shard-1) processes on its machine as configured in the server setup.
+
+You can adjust the `--prompt` and `--max_tokens` arguments as needed for your specific use case.
 
 ## Limitations and Considerations
 

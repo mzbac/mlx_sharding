@@ -1,3 +1,4 @@
+import argparse
 from typing import Tuple
 import grpc
 import mlx_tensor_pb2
@@ -11,28 +12,49 @@ from mlx_lm.models.base import KVCache
 import time
 
 
-tokenizer = AutoTokenizer.from_pretrained("shard_0")
-model = load_model("shard_0")
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Generate text using a specified model.")
+    parser.add_argument("--model", type=str, default="shard_0",
+                        help="Path or name of the model to use")
+    parser.add_argument("--prompt", type=str, default="how to write quicksort in python",
+                        help="Prompt for text generation")
+    parser.add_argument("--max_tokens", type=int, default=512,
+                        help="Maximum number of tokens to generate")
+    parser.add_argument("--server_address", type=str, default="localhost:50908",
+                        help="Address of the gRPC server")
+    return parser.parse_args()
 
-prompt = "how to write quicksort in python"
-messages = [{"role": "user", "content": prompt}]
-prompt = tokenizer.apply_chat_template(
-    messages, tokenize=False, add_generation_prompt=True
-)
-# update the address and port of the first shard
-channel_1 = grpc.insecure_channel('localhost:50908')
-stub_1 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_1)
+
+def main():
+    args = parse_arguments()
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    model = load_model(args.model)
+
+    messages = [{"role": "user", "content": args.prompt}]
+    prompt = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+
+    channel_1 = grpc.insecure_channel(args.server_address)
+    stub_1 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_1)
+
+    reset_response = stub_1.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
+    print("ResetCache Response:", reset_response.message)
+
+    for t in stream_generate(model, tokenizer, prompt, max_tokens=args.max_tokens, stub=stub_1):
+        print(t, end="", flush=True)
+    print()
 
 
 def send_tensor(stub, tensor: np.ndarray):
     tensor_bytes = tensor.tobytes()
-
     tensor_message = mlx_tensor_pb2.Tensor(
         tensor_data=tensor_bytes,
         shape=list(tensor.shape),
         dtype=str(tensor.dtype)
     )
-
     response = stub.SendTensor(tensor_message)
     return response
 
@@ -50,27 +72,17 @@ def response_to_mlx_array(response):
             "float16": np.float16,
         }
         np_dtype = dtype_map.get(dtype_str, np.float32)
-
-        np_array = np.frombuffer(tensor_data, dtype=np_dtype)
-
-        np_array = np_array.reshape(shape)
-
+        np_array = np.frombuffer(tensor_data, dtype=np_dtype).reshape(shape)
         mx_dtype = getattr(mx, dtype_str, mx.float32)
         tensor = mx.array(np_array, dtype=mx_dtype)
-
         return tensor
     except Exception as e:
         return None
 
 
-def generate_step(
-    prompt,
-    model,
-):
+def generate_step(prompt, model, stub):
     def sample(logits: mx.array) -> Tuple[mx.array, float]:
-        token = mx.argmax(logits, axis=-1)
-
-        return token
+        return mx.argmax(logits, axis=-1)
 
     y = prompt
     if hasattr(model, "make_cache"):
@@ -87,16 +99,13 @@ def generate_step(
         output = model(y[None], cache=cache)
         if output.dtype == mx.bfloat16:
             output = output.astype(mx.float16)
-        # Send the output tensor to the shard 1 server
-        response = send_tensor(stub_1, np.array(output))
+        response = send_tensor(stub, np.array(output))
         logits = response_to_mlx_array(response.tensor)
         logits = logits[:, -1, :]
-
         y = sample(logits)
         return y
 
     y = _step(y)
-
     mx.async_eval(y)
     while True:
         next_y = _step(y)
@@ -105,13 +114,7 @@ def generate_step(
         y = next_y
 
 
-def stream_generate(
-    model,
-    tokenizer,
-    prompt: str,
-    max_tokens: int = 100,
-    **kwargs,
-):
+def stream_generate(model, tokenizer, prompt: str, max_tokens: int = 100, stub=None, **kwargs):
     if not isinstance(tokenizer, TokenizerWrapper):
         tokenizer = TokenizerWrapper(tokenizer)
 
@@ -121,7 +124,7 @@ def stream_generate(
     tic = time.perf_counter()
     detokenizer.reset()
     for token, n in zip(
-        generate_step(prompt_tokens, model, **kwargs),
+        generate_step(prompt_tokens, model, stub, **kwargs),
         range(max_tokens),
     ):
         if n == 0:
@@ -130,8 +133,6 @@ def stream_generate(
         if token == tokenizer.eos_token_id:
             break
         detokenizer.add_token(token)
-
-        # Yield the last segment if streaming
         yield detokenizer.last_segment
 
     token_count = n + 1
@@ -148,8 +149,5 @@ def stream_generate(
     print(f"Generation: {gen_tps:.3f} tokens-per-sec")
 
 
-reset_response = stub_1.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
-print("ResetCache Response:", reset_response.message)
-for t in stream_generate(model, tokenizer, prompt, max_tokens=512):
-    print(t, end="", flush=True)
-print()
+if __name__ == "__main__":
+    main()
