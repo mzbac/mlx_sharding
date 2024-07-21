@@ -44,12 +44,23 @@ class MLXTensorServiceStub(object):
                 request_serializer=mlx__tensor__pb2.Tensor.SerializeToString,
                 response_deserializer=mlx__tensor__pb2.TensorResponse.FromString,
                 _registered_method=True)
+        self.ResetCache = channel.unary_unary(
+                '/mlxtensor.MLXTensorService/ResetCache',
+                request_serializer=mlx__tensor__pb2.ResetCacheRequest.SerializeToString,
+                response_deserializer=mlx__tensor__pb2.ResetCacheResponse.FromString,
+                _registered_method=True)
 
 
 class MLXTensorServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def SendTensor(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResetCache(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -62,6 +73,11 @@ def add_MLXTensorServiceServicer_to_server(servicer, server):
                     servicer.SendTensor,
                     request_deserializer=mlx__tensor__pb2.Tensor.FromString,
                     response_serializer=mlx__tensor__pb2.TensorResponse.SerializeToString,
+            ),
+            'ResetCache': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResetCache,
+                    request_deserializer=mlx__tensor__pb2.ResetCacheRequest.FromString,
+                    response_serializer=mlx__tensor__pb2.ResetCacheResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -91,6 +107,33 @@ class MLXTensorService(object):
             '/mlxtensor.MLXTensorService/SendTensor',
             mlx__tensor__pb2.Tensor.SerializeToString,
             mlx__tensor__pb2.TensorResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResetCache(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/mlxtensor.MLXTensorService/ResetCache',
+            mlx__tensor__pb2.ResetCacheRequest.SerializeToString,
+            mlx__tensor__pb2.ResetCacheResponse.FromString,
             options,
             channel_credentials,
             insecure,

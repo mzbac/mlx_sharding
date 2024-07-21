@@ -12,6 +12,7 @@ from .model.deepseek_v2 import Model, ModelArgs
 import argparse
 from mlx_lm.models.base import KVCache
 
+
 MODEL = None
 CACHE = None
 
@@ -42,6 +43,20 @@ def load_model(path_or_hf_repo: str):
     model.load_weights(list(weights.items()))
     model.eval()
     return model
+
+
+def reset_cache():
+    global CACHE
+    if hasattr(MODEL, "make_cache"):
+        CACHE = MODEL.make_cache()
+    else:
+        kv_heads = (
+            [MODEL.n_kv_heads] * len(MODEL.layers)
+            if isinstance(MODEL.n_kv_heads, int)
+            else MODEL.n_kv_heads
+        )
+        CACHE = [KVCache(MODEL.head_dim, n) for n in kv_heads]
+    print("Cache has been reset")
 
 
 class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
@@ -89,20 +104,25 @@ class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
             print(f"Error processing tensor: {e}")
             return mlx_tensor_pb2.TensorResponse(success=False, message=str(e))
 
+    def ResetCache(self, request, context):
+        try:
+            reset_cache()
+            return mlx_tensor_pb2.ResetCacheResponse(
+                success=True,
+                message="Cache reset successfully"
+            )
+        except Exception as e:
+            print(f"Error resetting cache: {e}")
+            return mlx_tensor_pb2.ResetCacheResponse(
+                success=False,
+                message=f"Error resetting cache: {str(e)}"
+            )
+
 
 def serve(model_path):
     global MODEL
     MODEL = load_model(model_path)
-    global CACHE
-    if hasattr(MODEL, "make_cache"):
-        CACHE = MODEL.make_cache()
-    else:
-        kv_heads = (
-            [MODEL.n_kv_heads] * len(MODEL.layers)
-            if isinstance(MODEL.n_kv_heads, int)
-            else MODEL.n_kv_heads
-        )
-        CACHE = [KVCache(MODEL.head_dim, n) for n in kv_heads]
+    reset_cache()
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
     mlx_tensor_pb2_grpc.add_MLXTensorServiceServicer_to_server(
         MLXTensorServicer(), server)

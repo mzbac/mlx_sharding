@@ -8,19 +8,20 @@ import mlx.core as mx
 from server.server import load_model
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.models.base import KVCache
+import time
+
 
 tokenizer = AutoTokenizer.from_pretrained("shard_0")
 model = load_model("shard_0")
 
 prompt = "how to write quicksort in python"
-
+messages = [{"role": "user", "content": prompt}]
+prompt = tokenizer.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True
+)
 # update the address and port of the first shard
-channel_1 = grpc.insecure_channel('localhost:49200')
+channel_1 = grpc.insecure_channel('localhost:50908')
 stub_1 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_1)
-
-# update the address and port of the second shard
-channel_2 = grpc.insecure_channel('localhost:51998')
-stub_2 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_2)
 
 
 def send_tensor(stub, tensor: np.ndarray):
@@ -84,13 +85,11 @@ def generate_step(
 
     def _step(y):
         output = model(y[None], cache=cache)
+        if output.dtype == mx.bfloat16:
+            output = output.astype(mx.float16)
         # Send the output tensor to the shard 1 server
         response = send_tensor(stub_1, np.array(output))
-        output = response_to_mlx_array(response.tensor)
-        # Send the output tensor to the shard 2 server assume shard 2 is the last shard
-        response = send_tensor(stub_2, np.array(output))
         logits = response_to_mlx_array(response.tensor)
-
         logits = logits[:, -1, :]
 
         y = sample(logits)
@@ -119,11 +118,15 @@ def stream_generate(
     prompt_tokens = mx.array(tokenizer.encode(prompt))
     detokenizer = tokenizer.detokenizer
 
+    tic = time.perf_counter()
     detokenizer.reset()
     for token, n in zip(
         generate_step(prompt_tokens, model, **kwargs),
         range(max_tokens),
     ):
+        if n == 0:
+            prompt_time = time.perf_counter() - tic
+            tic = time.perf_counter()
         if token == tokenizer.eos_token_id:
             break
         detokenizer.add_token(token)
@@ -131,10 +134,22 @@ def stream_generate(
         # Yield the last segment if streaming
         yield detokenizer.last_segment
 
+    token_count = n + 1
     detokenizer.finalize()
     yield detokenizer.last_segment
+    gen_time = time.perf_counter() - tic
+    print("=" * 10)
+    if token_count == 0:
+        print("No tokens generated for this prompt")
+        return
+    prompt_tps = prompt_tokens.size / prompt_time
+    gen_tps = (token_count - 1) / gen_time
+    print(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
+    print(f"Generation: {gen_tps:.3f} tokens-per-sec")
 
 
+reset_response = stub_1.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
+print("ResetCache Response:", reset_response.message)
 for t in stream_generate(model, tokenizer, prompt, max_tokens=512):
     print(t, end="", flush=True)
 print()

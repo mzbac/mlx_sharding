@@ -69,7 +69,6 @@ Update `generate.py` with the correct IP addresses and ports for each shard:
 
 ```python
 channel_1 = grpc.insecure_channel('machine1_ip:port')  # For shard_1
-channel_2 = grpc.insecure_channel('machine2_ip:port')  # For shard_2
 # Add more channels for additional shards if needed
 ```
 
@@ -92,17 +91,15 @@ This will use the distributed model to generate text based on the given prompt, 
 
 ## Limitations and Considerations
 
-1. **Cache Cleanup**: The current implementation does not clean up the cache between generations. To start fresh, you need to restart the server processes.
+1. **Fixed Shard Configuration**: The generate script is currently set up for three shards (one local, two remote). To use more shards, you'll need to modify the script to include additional gRPC channels and adjust the `generate_step` function accordingly.
 
-2. **Fixed Shard Configuration**: The generate script is currently set up for three shards (one local, two remote). To use more shards, you'll need to modify the script to include additional gRPC channels and adjust the `generate_step` function accordingly.
+2. **Network Dependency**: The performance of this pipeline parallelism implementation is heavily dependent on network speed and latency between machines.
 
-3. **Network Dependency**: The performance of this pipeline parallelism implementation is heavily dependent on network speed and latency between machines.
+3. **Error Handling**: The current implementation has basic error handling. In a production environment, you'd want to implement more robust error handling and recovery mechanisms.
 
-4. **Error Handling**: The current implementation has basic error handling. In a production environment, you'd want to implement more robust error handling and recovery mechanisms.
+4. **Security**: This demo uses insecure gRPC channels. For any real-world application, implement proper security measures.
 
-5. **Security**: This demo uses insecure gRPC channels. For any real-world application, implement proper security measures.
-
-6. **Shard_0 Dependency**: The generate script relies on `shard_0` for initial processing. Ensure it's available on the local machine running the script.
+5. **Shard_0 Dependency**: The generate script relies on `shard_0` for initial processing. Ensure it's available on the local machine running the script.
 
 ## Extending the System
 

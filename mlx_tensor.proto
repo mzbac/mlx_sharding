@@ -4,6 +4,7 @@ package mlxtensor;
 
 service MLXTensorService {
   rpc SendTensor (Tensor) returns (TensorResponse) {}
+  rpc ResetCache (ResetCacheRequest) returns (ResetCacheResponse) {}
 }
 
 message Tensor {
@@ -16,4 +17,12 @@ message TensorResponse {
   bool success = 1;
   string message = 2;
   Tensor tensor = 3;
+}
+
+message ResetCacheRequest {
+}
+
+message ResetCacheResponse {
+  bool success = 1;
+  string message = 2;
 }

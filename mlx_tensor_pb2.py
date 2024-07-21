@@ -14,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10mlx_tensor.proto\x12\tmlxtensor\";\n\x06Tensor\x12\x13\n\x0btensor_data\x18\x01 \x01(\x0c\x12\r\n\x05shape\x18\x02 \x03(\x05\x12\r\n\x05\x64type\x18\x03 \x01(\t\"U\n\x0eTensorResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12!\n\x06tensor\x18\x03 \x01(\x0b\x32\x11.mlxtensor.Tensor2P\n\x10MLXTensorService\x12<\n\nSendTensor\x12\x11.mlxtensor.Tensor\x1a\x19.mlxtensor.TensorResponse\"\x00\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10mlx_tensor.proto\x12\tmlxtensor\";\n\x06Tensor\x12\x13\n\x0btensor_data\x18\x01 \x01(\x0c\x12\r\n\x05shape\x18\x02 \x03(\x05\x12\r\n\x05\x64type\x18\x03 \x01(\t\"U\n\x0eTensorResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\x12!\n\x06tensor\x18\x03 \x01(\x0b\x32\x11.mlxtensor.Tensor\"\x13\n\x11ResetCacheRequest\"6\n\x12ResetCacheResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2\x9d\x01\n\x10MLXTensorService\x12<\n\nSendTensor\x12\x11.mlxtensor.Tensor\x1a\x19.mlxtensor.TensorResponse\"\x00\x12K\n\nResetCache\x12\x1c.mlxtensor.ResetCacheRequest\x1a\x1d.mlxtensor.ResetCacheResponse\"\x00\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -25,6 +25,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TENSOR']._serialized_end=90
   _globals['_TENSORRESPONSE']._serialized_start=92
   _globals['_TENSORRESPONSE']._serialized_end=177
-  _globals['_MLXTENSORSERVICE']._serialized_start=179
-  _globals['_MLXTENSORSERVICE']._serialized_end=259
+  _globals['_RESETCACHEREQUEST']._serialized_start=179
+  _globals['_RESETCACHEREQUEST']._serialized_end=198
+  _globals['_RESETCACHERESPONSE']._serialized_start=200
+  _globals['_RESETCACHERESPONSE']._serialized_end=254
+  _globals['_MLXTENSORSERVICE']._serialized_start=257
+  _globals['_MLXTENSORSERVICE']._serialized_end=414
 # @@protoc_insertion_point(module_scope)
