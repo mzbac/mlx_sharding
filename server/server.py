@@ -1,4 +1,5 @@
 import glob
+from importlib import import_module
 import json
 import grpc
 from concurrent import futures
@@ -8,13 +9,30 @@ import mlx_tensor_pb2_grpc
 import mlx.core as mx
 from mlx_lm.utils import get_model_path
 import mlx.nn as nn
-from .model.deepseek_v2 import Model, ModelArgs
 import argparse
 from mlx_lm.models.base import KVCache
 
 
 MODEL = None
 CACHE = None
+
+MODEL_REMAPPING = {
+    "mistral": "llama",  # mistral is compatible with llama
+    "phi-msft": "phixtral",
+}
+
+
+def _get_classes(config: dict):
+    model_type = config["model_type"]
+    model_type = MODEL_REMAPPING.get(model_type, model_type)
+    try:
+        arch = import_module(f".model.{model_type}", package="server")
+    except ImportError:
+        msg = f"Model type {model_type} not supported."
+        print(msg)
+        raise ValueError(msg)
+
+    return arch.Model, arch.ModelArgs
 
 
 def load_model(path_or_hf_repo: str):
@@ -27,7 +45,10 @@ def load_model(path_or_hf_repo: str):
     weights = {}
     for wf in weight_files:
         weights.update(mx.load(wf))
-    model = Model(ModelArgs.from_dict(config))
+    model_class, model_args_class = _get_classes(config=config)
+
+    model_args = model_args_class.from_dict(config)
+    model = model_class(model_args)
     if hasattr(model, "sanitize"):
         weights = model.sanitize(weights)
     if (quantization := config.get("quantization", None)) is not None:
@@ -123,7 +144,13 @@ def serve(model_path):
     global MODEL
     MODEL = load_model(model_path)
     reset_cache()
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server_options = [
+        ('grpc.max_metadata_size', 32 * 1024 * 1024),
+        ('grpc.max_send_message_length', 128 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 128 * 1024 * 1024),
+    ]
+    server = grpc.server(futures.ThreadPoolExecutor(
+        max_workers=10), options=server_options)
     mlx_tensor_pb2_grpc.add_MLXTensorServiceServicer_to_server(
         MLXTensorServicer(), server)
 

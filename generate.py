@@ -37,7 +37,13 @@ def main():
         messages, tokenize=False, add_generation_prompt=True
     )
 
-    channel_1 = grpc.insecure_channel(args.server_address)
+    channel_options = [
+        ('grpc.max_metadata_size', 32 * 1024 * 1024),
+        ('grpc.max_send_message_length', 128 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 128 * 1024 * 1024),
+    ]
+    channel_1 = grpc.insecure_channel(
+        args.server_address, options=channel_options)
     stub_1 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_1)
 
     reset_response = stub_1.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
