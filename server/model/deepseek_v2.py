@@ -486,119 +486,15 @@ class Model(nn.Module):
     def sanitize(self, weights):
         for l in range(self.args.num_hidden_layers):
             prefix = f"model.layers.{l}"
-            if l < self.args.start_layer or l >= self.args.end_layer:
-                weights.pop(f"{prefix}.input_layernorm.weight", None)
-                weights.pop(f"{prefix}.input_layernorm.scales", None)
-                weights.pop(f"{prefix}.input_layernorm.biases", None)
-                weights.pop(f"{prefix}.post_attention_layernorm.weight", None)
-                weights.pop(f"{prefix}.post_attention_layernorm.scales", None)
-                weights.pop(f"{prefix}.post_attention_layernorm.biases", None)
-                weights.pop(f"{prefix}.self_attn.q_proj.weight", None)
-                weights.pop(f"{prefix}.self_attn.q_proj.scales", None)
-                weights.pop(f"{prefix}.self_attn.q_proj.biases", None)
-                weights.pop(f"{prefix}.self_attn.kv_a_layernorm.weight", None)
-                weights.pop(f"{prefix}.self_attn.kv_a_layernorm.scales", None)
-                weights.pop(f"{prefix}.self_attn.kv_a_layernorm.biases", None)
-                weights.pop(
-                    f"{prefix}.self_attn.kv_a_proj_with_mqa.weight", None)
-                weights.pop(
-                    f"{prefix}.self_attn.kv_a_proj_with_mqa.scales", None)
-                weights.pop(
-                    f"{prefix}.self_attn.kv_a_proj_with_mqa.biases", None)
-                weights.pop(f"{prefix}.self_attn.kv_b_proj.weight", None)
-                weights.pop(f"{prefix}.self_attn.kv_b_proj.scales", None)
-                weights.pop(f"{prefix}.self_attn.kv_b_proj.biases", None)
-                weights.pop(f"{prefix}.self_attn.o_proj.weight", None)
-                weights.pop(f"{prefix}.self_attn.o_proj.scales", None)
-                weights.pop(f"{prefix}.self_attn.o_proj.biases", None)
-                if f"{prefix}.mlp.gate_proj.weight" in weights:
-                    weights.pop(f"{prefix}.mlp.gate_proj.weight", None)
-                    weights.pop(f"{prefix}.mlp.gate_proj.scales", None)
-                    weights.pop(f"{prefix}.mlp.gate_proj.biases", None)
-                    weights.pop(f"{prefix}.mlp.down_proj.weight", None)
-                    weights.pop(f"{prefix}.mlp.down_proj.scales", None)
-                    weights.pop(f"{prefix}.mlp.down_proj.biases", None)
-                    weights.pop(f"{prefix}.mlp.up_proj.weight", None)
-                    weights.pop(f"{prefix}.mlp.up_proj.scales", None)
-                    weights.pop(f"{prefix}.mlp.up_proj.biases", None)
-                else:
-                    for e in range(self.args.n_routed_experts):
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.gate_proj.weight", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.gate_proj.scales", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.gate_proj.biases", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.down_proj.weight", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.down_proj.scales", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.down_proj.biases", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.up_proj.weight", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.up_proj.scales", None)
-                        weights.pop(f"{prefix}.mlp.experts.{
-                                    e}.up_proj.biases", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.gate_proj.weight", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.gate_proj.scales", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.gate_proj.biases", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.down_proj.weight", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.down_proj.scales", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.down_proj.biases", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.up_proj.weight", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.up_proj.scales", None)
-                    weights.pop(
-                        f"{prefix}.mlp.shared_experts.up_proj.biases", None)
-            else:
-                if f"{prefix}.mlp.experts.0.gate_proj.weight" in weights:
-                    for m in ["gate_proj", "down_proj", "up_proj"]:
-                        expert_weights = [
-                            weights.pop(f"{prefix}.mlp.experts.{e}.{m}.weight")
+            for n, m in [("w1", "gate_proj"), ("w2", "down_proj"), ("w3", "up_proj")]:
+                for k in ["weight", "scales", "biases"]:
+                    if f"{prefix}.mlp.experts.0.{m}.{k}" in weights:
+                        to_join = [
+                            weights.pop(f"{prefix}.mlp.experts.{e}.{m}.{k}")
                             for e in range(self.args.n_routed_experts)
-                            if f"{prefix}.mlp.experts.{e}.{m}.weight" in weights
                         ]
                         weights[f"{prefix}.mlp.switch_mlp.{
-                            m}.weight"] = mx.stack(expert_weights)
-
-                        expert_scales = [
-                            weights.pop(f"{prefix}.mlp.experts.{e}.{m}.scales")
-                            for e in range(self.args.n_routed_experts)
-                            if f"{prefix}.mlp.experts.{e}.{m}.scales" in weights
-                        ]
-                        weights[f"{prefix}.mlp.switch_mlp.{
-                            m}.scales"] = mx.stack(expert_scales)
-
-                        expert_biases = [
-                            weights.pop(f"{prefix}.mlp.experts.{e}.{m}.biases")
-                            for e in range(self.args.n_routed_experts)
-                            if f"{prefix}.mlp.experts.{e}.{m}.biases" in weights
-                        ]
-                        weights[f"{prefix}.mlp.switch_mlp.{
-                            m}.biases"] = mx.stack(expert_biases)
-
-        if self.args.start_layer > 0:
-            weights.pop('model.embed_tokens.weight', None)
-            weights.pop('model.embed_tokens.scales', None)
-            weights.pop('model.embed_tokens.biases', None)
-
-        if self.args.end_layer < self.args.num_hidden_layers:
-            weights.pop('model.norm.weight', None)
-            weights.pop('model.norm.bias', None)
-            weights.pop('model.norm.scales', None)
-            weights.pop('lm_head.weight', None)
-            weights.pop('lm_head.scales', None)
-            weights.pop('lm_head.biases', None)
-
+                            m}.{k}"] = mx.stack(to_join)
         return weights
 
     @ property

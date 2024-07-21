@@ -30,9 +30,8 @@ While not optimized for production use, this demo serves as a starting point for
 Use `sharding_weight.py` to split your model into multiple shards:
 
 ```bash
-python sharding_weight.py --model_dir <path_to_full_model> --output_dir shard_0 --start_layer 0 --end_layer 2
-python sharding_weight.py --model_dir <path_to_full_model> --output_dir shard_1 --start_layer 2 --end_layer 4
-python sharding_weight.py --model_dir <path_to_full_model> --output_dir shard_2 --start_layer 4 --end_layer 6
+python sharding_weight.py --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --output_dir shard_0 --start_layer 0 --end_layer 14 --total_layers 27
+python sharding_weight.py --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --output_dir shard_1 --start_layer 14 --end_layer 27 --total_layers 27
 # Repeat for additional shards as needed
 ```
 
