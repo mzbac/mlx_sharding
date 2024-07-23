@@ -50,6 +50,11 @@ def create_generate_step_with_grpc(grpc_stubs: List):
         top_p: float = 1.0,
         logit_bias: Optional[Dict[int, float]] = None,
     ) -> Generator[Tuple[mx.array, mx.array], None, None]:
+        
+        for stub in grpc_stubs:
+            reset_response = stub.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
+            print("ResetCache Response:", reset_response.message)
+
         def sample(logits: mx.array) -> Tuple[mx.array, float]:
             if logit_bias:
                 indices = mx.array(list(logit_bias.keys()))

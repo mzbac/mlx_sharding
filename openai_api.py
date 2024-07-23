@@ -14,7 +14,6 @@ from transformers import PreTrainedTokenizer
 
 import grpc
 import mlx_tensor_pb2_grpc
-import mlx_tensor_pb2
 
 from mlx_lm.tokenizer_utils import TokenizerWrapper, load_tokenizer
 from mlx_lm.utils import get_model_path
@@ -207,9 +206,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.logprobs = self.body.get("logprobs", -1)
         self.validate_model_parameters()
 
-        for stub in self.model_provider.grpc_stubs:
-            reset_response = stub.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
-            print("ResetCache Response:", reset_response.message)
+
         # Load the model if needed
         try:
             self.model, self.tokenizer, self.generate_step = self.model_provider.load(self.requested_model)
