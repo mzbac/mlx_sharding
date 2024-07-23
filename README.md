@@ -1,6 +1,6 @@
 # MLX Pipeline Parallelism Demo
 
-This project demonstrates how to implement pipeline parallelism for large language models using MLX. It includes tools for sharding a model, serving shards across multiple machines, and generating text using the distributed model.
+This project demonstrates how to implement pipeline parallelism for large language models using MLX. It includes tools for sharding a model, serving shards across multiple machines, and generating text using the distributed model. Additionally, it now features an OpenAI API-compatible server for easier integration and usage.
 
 ## Demo Video
 
@@ -20,6 +20,7 @@ This repository is designed for educational purposes to illustrate how pipeline 
 1. Sharding a large language model
 2. Distributing model shards across multiple machines
 3. Implementing a simple pipeline for text generation
+4. Serving the model through an OpenAI API-compatible interface
 
 While not optimized for production use, this demo serves as a starting point for understanding and experimenting with pipeline parallelism in machine learning workflows.
 
@@ -55,33 +56,47 @@ python -m server.server --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-s
 
 Note the IP address and port printed by the server.
 
-### 4. Configure the Generate Script
+### 4. Generate Text
 
-The `generate.py` script accepts command-line arguments for flexibility. Key arguments include:
+#### Using the generate script
 
-- `--model`: Specifies the path or name of the model to use (local shard)
-- `--server_address`: Specifies the address of the remote shard server
-- `--prompt`: Sets the prompt for text generation
-- `--max_tokens`: Sets the maximum number of tokens to generate
-
-### 5. Generate Text
-
-Run the generate script on the local machine with the desired arguments. For example:
+Run the generate script on the local machine with the desired arguments:
 
 ```bash
 python generate.py --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0 --server_address <remote_ip>:<port> --prompt "Your prompt here" --max_tokens 512
 ```
 
-This command:
+#### Using the OpenAI API-compatible server
 
-- Uses the local shard `mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0`
-- Connects to a remote shard server at `<remote_ip>:<port>` (replace with the actual IP address and port of your remote server)
-- Generates text based on the given prompt
-- Limits the generation to a maximum of 512 tokens
+To use the OpenAI API-compatible server:
 
-The specified model (shard-0) handles the initial processing locally, while the remote shard (shard-1) processes on its machine as configured in the server setup.
+1. Start the server:
 
-You can adjust the `--prompt` and `--max_tokens` arguments as needed for your specific use case.
+   ```bash
+   python openai_api.py --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2>
+   ```
+
+2. Use the API endpoints:
+   - `/v1/completions`: Text completion endpoint
+   - `/v1/chat/completions`: Chat completion endpoint
+
+Example usage with Python's `requests` library:
+
+```python
+import requests
+
+url = "http://localhost:8080/v1/completions"
+headers = {"Content-Type": "application/json"}
+data = {
+    "model": "your-model-name",
+    "prompt": "Once upon a time",
+    "max_tokens": 50,
+    "temperature": 0.7
+}
+
+response = requests.post(url, json=data, headers=headers)
+print(response.json())
+```
 
 ## Limitations and Considerations
 
