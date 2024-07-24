@@ -13,11 +13,10 @@ import mlx.nn as nn
 from transformers import PreTrainedTokenizer
 
 import grpc
-import mlx_tensor_pb2_grpc
 
 from mlx_lm.tokenizer_utils import TokenizerWrapper, load_tokenizer
 from mlx_lm.utils import get_model_path
-from server.server import load_model
+from shard.server import load_model
 from utils import create_generate_step_with_grpc
 
 class StopCondition(NamedTuple):

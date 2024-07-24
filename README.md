@@ -51,7 +51,7 @@ Copy the shard directories to their respective machines:
 On each remote machine, start a server instance for its respective shard. For example, to start the server for shard 1:
 
 ```bash
-python -m server.server --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-1
+python -m shard.main --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-1
 ```
 
 Note the IP address and port printed by the server.

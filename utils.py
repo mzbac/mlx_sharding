@@ -5,7 +5,7 @@ from mlx_lm.models.base import KVCache
 from mlx_lm.sample_utils import top_p_sampling
 from mlx_lm.utils import apply_repetition_penalty
 import numpy as np
-import mlx_tensor_pb2
+from shard.grpc import mlx_tensor_pb2
 
 
 def send_tensor(stub, tensor: np.ndarray):

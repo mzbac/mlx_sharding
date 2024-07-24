@@ -4,8 +4,7 @@ import json
 import grpc
 from concurrent import futures
 import numpy as np
-import mlx_tensor_pb2
-import mlx_tensor_pb2_grpc
+from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 import mlx.core as mx
 from mlx_lm.utils import get_model_path
 import mlx.nn as nn
@@ -26,7 +25,7 @@ def _get_classes(config: dict):
     model_type = config["model_type"]
     model_type = MODEL_REMAPPING.get(model_type, model_type)
     try:
-        arch = import_module(f".model.{model_type}", package="server")
+        arch = import_module(f".model.{model_type}", package="shard.server")
     except ImportError:
         msg = f"Model type {model_type} not supported."
         print(msg)
