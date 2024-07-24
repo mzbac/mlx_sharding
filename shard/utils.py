@@ -1,11 +1,81 @@
+from importlib import import_module
+import glob
+import json
 import mlx.core as mx
 import mlx.nn as nn
 from typing import Dict, Generator, Optional, Tuple, List
 from mlx_lm.models.base import KVCache
 from mlx_lm.sample_utils import top_p_sampling
-from mlx_lm.utils import apply_repetition_penalty
+from mlx_lm.utils import apply_repetition_penalty, get_model_path
 import numpy as np
-import mlx_tensor_pb2
+from .grpc import mlx_tensor_pb2
+
+MODEL_REMAPPING = {
+    "mistral": "llama",  # mistral is compatible with llama
+    "phi-msft": "phixtral",
+}
+
+def _get_classes(config: dict):
+    model_type = config["model_type"]
+    model_type = MODEL_REMAPPING.get(model_type, model_type)
+    try:
+        arch = import_module(f".model.{model_type}", package="shard.server")
+    except ImportError:
+        msg = f"Model type {model_type} not supported."
+        print(msg)
+        raise ValueError(msg)
+
+    return arch.Model, arch.ModelArgs
+
+
+def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = None):
+    path = get_model_path(path_or_hf_repo)
+    with open(path / "config.json", "r") as f:
+        config = json.load(f)
+        if start_layer is not None and end_layer is not None:
+            config['start_layer'] = start_layer
+            config['end_layer'] = end_layer
+    weight_files = glob.glob(str(path / "*.safetensors"))
+    if not weight_files:
+        raise FileNotFoundError(f"No safetensors found in {path}")
+    weights = {}
+    for wf in weight_files:
+        weights.update(mx.load(wf))
+    model_class, model_args_class = _get_classes(config=config)
+
+    model_args = model_args_class.from_dict(config)
+    model = model_class(model_args)
+    total_layers = len(model.layers)
+
+    if start_layer is not None and end_layer is not None:
+        shard_state_dict = {}
+        for key, value in weights.items():
+            if key.startswith('model.layers.'):
+                layer_num = int(key.split('.')[2])
+                if start_layer <= layer_num < end_layer:
+                    shard_state_dict[key] = value
+            elif start_layer == 0 and key.startswith('model.embed_tokens'):
+                shard_state_dict[key] = value
+            elif end_layer == total_layers and (key.startswith('model.norm') or key.startswith('lm_head')):
+                shard_state_dict[key] = value
+        
+        weights = shard_state_dict
+
+    if hasattr(model, "sanitize"):
+        weights = model.sanitize(weights)
+    if (quantization := config.get("quantization", None)) is not None:
+        def class_predicate(p, m):
+            if not hasattr(m, "to_quantized"):
+                return False
+            return f"{p}.scales" in weights
+        nn.quantize(
+            model,
+            **quantization,
+            class_predicate=class_predicate,
+        )
+    model.load_weights(list(weights.items()))
+    model.eval()
+    return model
 
 
 def send_tensor(stub, tensor: np.ndarray):

@@ -1,70 +1,15 @@
-import glob
-from importlib import import_module
-import json
+
 import grpc
 from concurrent import futures
 import numpy as np
-import mlx_tensor_pb2
-import mlx_tensor_pb2_grpc
+from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
+from ..utils import load_model
 import mlx.core as mx
-from mlx_lm.utils import get_model_path
-import mlx.nn as nn
 import argparse
 from mlx_lm.models.base import KVCache
 
-
 MODEL = None
 CACHE = None
-
-MODEL_REMAPPING = {
-    "mistral": "llama",  # mistral is compatible with llama
-    "phi-msft": "phixtral",
-}
-
-
-def _get_classes(config: dict):
-    model_type = config["model_type"]
-    model_type = MODEL_REMAPPING.get(model_type, model_type)
-    try:
-        arch = import_module(f".model.{model_type}", package="server")
-    except ImportError:
-        msg = f"Model type {model_type} not supported."
-        print(msg)
-        raise ValueError(msg)
-
-    return arch.Model, arch.ModelArgs
-
-
-def load_model(path_or_hf_repo: str):
-    path = get_model_path(path_or_hf_repo)
-    with open(path / "config.json", "r") as f:
-        config = json.load(f)
-    weight_files = glob.glob(str(path / "*.safetensors"))
-    if not weight_files:
-        raise FileNotFoundError(f"No safetensors found in {path}")
-    weights = {}
-    for wf in weight_files:
-        weights.update(mx.load(wf))
-    model_class, model_args_class = _get_classes(config=config)
-
-    model_args = model_args_class.from_dict(config)
-    model = model_class(model_args)
-    if hasattr(model, "sanitize"):
-        weights = model.sanitize(weights)
-    if (quantization := config.get("quantization", None)) is not None:
-        def class_predicate(p, m):
-            if not hasattr(m, "to_quantized"):
-                return False
-            return f"{p}.scales" in weights
-        nn.quantize(
-            model,
-            **quantization,
-            class_predicate=class_predicate,
-        )
-    model.load_weights(list(weights.items()))
-    model.eval()
-    return model
-
 
 def reset_cache():
     global CACHE
@@ -140,9 +85,9 @@ class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
             )
 
 
-def serve(model_path):
+def serve(model_path, start_layer=None, end_layer=None):
     global MODEL
-    MODEL = load_model(model_path)
+    MODEL = load_model(model_path, start_layer=start_layer, end_layer=end_layer)
     reset_cache()
     server_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
@@ -157,13 +102,7 @@ def serve(model_path):
     port = server.add_insecure_port('[::]:0')
     server.start()
     print(f"Server started, listening on 0.0.0.0:{port}")
+    if start_layer is not None or end_layer is not None:
+        print(f"Model loaded with layers {start_layer or 0} to {end_layer or 'end'}")
     server.wait_for_termination()
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="MLX Tensor Server")
-    parser.add_argument("--model", type=str, required=True,
-                        help="Path to the model or HuggingFace repo")
-    args = parser.parse_args()
-
-    serve(args.model)

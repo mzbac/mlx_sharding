@@ -1,58 +1,54 @@
 import argparse
-from typing import Tuple
+from typing import Tuple, List
 import grpc
-import mlx_tensor_pb2
-import mlx_tensor_pb2_grpc
+from shard.grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 from transformers import AutoTokenizer
 import numpy as np
 import mlx.core as mx
-from server.server import load_model
+from shard.utils import load_model
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.models.base import KVCache
 import time
 
-
 def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description="Generate text using a specified model.")
-    parser.add_argument("--model", type=str, default="shard_0",
-                        help="Path or name of the model to use")
-    parser.add_argument("--prompt", type=str, default="how to write quicksort in python",
-                        help="Prompt for text generation")
-    parser.add_argument("--max_tokens", type=int, default=512,
-                        help="Maximum number of tokens to generate")
-    parser.add_argument("--server_address", type=str, default="localhost:50908",
-                        help="Address of the gRPC server")
+    parser = argparse.ArgumentParser(description="Generate text using a specified model.")
+    parser.add_argument("--model", type=str, default="shard_0", help="Path or name of the model to use")
+    parser.add_argument("--prompt", type=str, default="how to write quicksort in python", help="Prompt for text generation")
+    parser.add_argument("--max_tokens", type=int, default=512, help="Maximum number of tokens to generate")
+    parser.add_argument("--server_address", type=str, default="localhost:50051", help="Comma-separated addresses of the gRPC servers")
+    parser.add_argument("--start_layer", type=int, default=None, help="Start layer for dynamic sharding")
+    parser.add_argument("--end_layer", type=int, default=None, help="End layer for dynamic sharding")
     return parser.parse_args()
-
 
 def main():
     args = parse_arguments()
 
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    model = load_model(args.model)
+    model = load_model(args.model, start_layer=args.start_layer, end_layer=args.end_layer)
 
     messages = [{"role": "user", "content": args.prompt}]
-    prompt = tokenizer.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True
-    )
+    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
 
     channel_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
         ('grpc.max_send_message_length', 128 * 1024 * 1024),
         ('grpc.max_receive_message_length', 128 * 1024 * 1024),
     ]
-    channel_1 = grpc.insecure_channel(
-        args.server_address, options=channel_options)
-    stub_1 = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel_1)
+    
+    server_addresses = args.server_address.split(',')
+    stubs = []
+    for address in server_addresses:
+        channel = grpc.insecure_channel(address.strip(), options=channel_options)
+        stub = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel)
+        stubs.append(stub)
 
-    reset_response = stub_1.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
-    print("ResetCache Response:", reset_response.message)
+    for stub in stubs:
+        reset_response = stub.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
+        print(f"ResetCache Response for {stub}: {reset_response.message}")
 
-    for t in stream_generate(model, tokenizer, prompt, max_tokens=args.max_tokens, stub=stub_1):
+    for t in stream_generate(model, tokenizer, prompt, max_tokens=args.max_tokens, stubs=stubs):
         print(t, end="", flush=True)
     print()
-
 
 def send_tensor(stub, tensor: np.ndarray):
     tensor_bytes = tensor.tobytes()
@@ -64,17 +60,14 @@ def send_tensor(stub, tensor: np.ndarray):
     response = stub.SendTensor(tensor_message)
     return response
 
-
 def response_to_mlx_array(response):
     try:
         tensor_data = response.tensor_data
         shape = response.shape
         dtype_str = response.dtype
         dtype_map = {
-            'float32': np.float32,
-            'int32': np.int32,
-            'float64': np.float64,
-            'int64': np.int64,
+            'float32': np.float32, 'int32': np.int32,
+            'float64': np.float64, 'int64': np.int64,
             "float16": np.float16,
         }
         np_dtype = dtype_map.get(dtype_str, np.float32)
@@ -85,8 +78,7 @@ def response_to_mlx_array(response):
     except Exception as e:
         return None
 
-
-def generate_step(prompt, model, stub):
+def generate_step(prompt, model, stubs: List[mlx_tensor_pb2_grpc.MLXTensorServiceStub]):
     def sample(logits: mx.array) -> Tuple[mx.array, float]:
         return mx.argmax(logits, axis=-1)
 
@@ -105,11 +97,16 @@ def generate_step(prompt, model, stub):
         output = model(y[None], cache=cache)
         if output.dtype == mx.bfloat16:
             output = output.astype(mx.float16)
-        response = send_tensor(stub, np.array(output))
-        logits = response_to_mlx_array(response.tensor)
-        logits = logits[:, -1, :]
-        y = sample(logits)
-        return y
+        
+        for i, stub in enumerate(stubs):
+            response = send_tensor(stub, np.array(output))
+            output = response_to_mlx_array(response.tensor)
+            if i == len(stubs) - 1:  # Last stub
+                logits = output[:, -1, :]
+                y = sample(logits)
+                return y
+        
+        raise ValueError("No valid response from any stub")
 
     y = _step(y)
     mx.async_eval(y)
@@ -119,8 +116,7 @@ def generate_step(prompt, model, stub):
         yield y.item()
         y = next_y
 
-
-def stream_generate(model, tokenizer, prompt: str, max_tokens: int = 100, stub=None, **kwargs):
+def stream_generate(model, tokenizer, prompt: str, max_tokens: int = 100, stubs=None, **kwargs):
     if not isinstance(tokenizer, TokenizerWrapper):
         tokenizer = TokenizerWrapper(tokenizer)
 
@@ -130,7 +126,7 @@ def stream_generate(model, tokenizer, prompt: str, max_tokens: int = 100, stub=N
     tic = time.perf_counter()
     detokenizer.reset()
     for token, n in zip(
-        generate_step(prompt_tokens, model, stub, **kwargs),
+        generate_step(prompt_tokens, model, stubs, **kwargs),
         range(max_tokens),
     ):
         if n == 0:
@@ -153,7 +149,6 @@ def stream_generate(model, tokenizer, prompt: str, max_tokens: int = 100, stub=N
     gen_tps = (token_count - 1) / gen_time
     print(f"Prompt: {prompt_tps:.3f} tokens-per-sec")
     print(f"Generation: {gen_tps:.3f} tokens-per-sec")
-
 
 if __name__ == "__main__":
     main()
