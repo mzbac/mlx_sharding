@@ -1,7 +1,7 @@
 from .server.server import serve
 import argparse
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description="MLX Tensor Server")
     parser.add_argument("--model", type=str, required=True,
                         help="Path to the model or HuggingFace repo")
@@ -12,3 +12,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     serve(args.model, start_layer=args.start_layer, end_layer=args.end_layer)
+
+if __name__ == "__main__":
+    main()
