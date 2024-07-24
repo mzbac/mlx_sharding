@@ -68,9 +68,17 @@ To use the OpenAI API-compatible server:
 1. Start the server:
 
    ```bash
-   python -m shard.openai_api --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2>
+
+    python -m shard.openai_api --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2> [--start-layer START_LAYER] [--end-layer END_LAYER]
+
    ```
 
+   Options:
+   - `--model`: Path to your model
+   - `--llm-shard-addresses`: Comma-separated list of gRPC server addresses for LLM model shards
+   - `--start-layer` (optional): Start layer index for model sharding
+   - `--end-layer` (optional): End layer index for model sharding
+   -
 2. Use the API endpoints:
    - `/v1/completions`: Text completion endpoint
    - `/v1/chat/completions`: Chat completion endpoint
