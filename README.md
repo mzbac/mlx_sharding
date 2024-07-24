@@ -1,6 +1,6 @@
-# MLX Pipeline Parallelism Demo
+# MLX Sharding
 
-This project demonstrates how to implement pipeline parallelism for large language models using MLX. It includes tools for sharding a model, serving shards across multiple machines, and generating text using the distributed model. Additionally, it now features an OpenAI API-compatible server for easier integration and usage.
+This project demonstrates how to implement pipeline parallelism for large language models using MLX. It includes tools for sharding a model, serving shards across multiple machines, and generating text using the distributed model. Additionally, it features an OpenAI API-compatible server for easier integration and usage.
 
 ## Demo Video
 
@@ -21,9 +21,13 @@ While not optimized for production use, this demo serves as a starting point for
 
 ## Setup and Usage
 
-### 1. Shard the Model
+### 1. Model Preparation
 
-Use `sharding_weight.py` to split your model into multiple shards:
+You have two main options for preparing and using the model:
+
+#### Option A: Pre-Sharding the Model
+
+If you prefer to pre-shard the model, use `sharding_weight.py`:
 
 ```bash
 python sharding_weight.py --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --output_dir shard_0 --start_layer 0 --end_layer 14 --total_layers 27
@@ -31,54 +35,68 @@ python sharding_weight.py --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct
 # Repeat for additional shards as needed
 ```
 
-This will create directories (`shard_0`, `shard_1`, `shard_2`, etc.) containing the sharded model weights and configurations.
+#### Option B: Dynamic Sharding
 
-### 2. Distribute Shards
+You can let the system dynamically load and shard the weights when starting the server. This option doesn't require pre-sharding.
 
-Copy the shard directories to their respective machines:
+### 2. Distribute Shards (If Using Option A)
 
-- Local machine (for generate script): Keep `shard_0`
-- Machine 1: Copy `shard_1`
-- Machine 2: Copy `shard_2`
+If you've pre-sharded the model, copy the shard directories to their respective machines. Skip this step for Option B.
 
 ### 3. Start the Servers
 
-On each remote machine, start a server instance for its respective shard. For example, to start the server for shard 1:
+Start server instances based on your chosen approach:
+
+#### For Pre-Sharded Model (Option A)
+
+On each machine with a shard, start a server instance. For example:
 
 ```bash
 python -m shard.main --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-1
 ```
 
-Note the IP address and port printed by the server.
+#### For Dynamic Sharding (Option B)
+
+Start the server with specific layer ranges:
+
+```bash
+python -m shard.main --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --start-layer 0 --end-layer 14
+```
+
+Note the IP address and port printed by each server.
 
 ### 4. Generate Text
 
 #### Using the generate script
 
-Run the generate script on the local machine with the desired arguments:
+For a dynamically sharded setup:
 
 ```bash
-python generate.py --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0 --server_address <remote_ip>:<port> --prompt "Your prompt here" --max_tokens 512
+python generate.py --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --start_layer 0 --end_layer 14 --server_address <remote_ip1>:<port1>,<remote_ip2>:<port2> --prompt "Your prompt here" --max_tokens 512
+```
+
+For a pre-sharded setup:
+
+```bash
+python generate.py --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0 --server_address <remote_ip1>:<port1>,<remote_ip2>:<port2> --prompt "Your prompt here" --max_tokens 512
 ```
 
 #### Using the OpenAI API-compatible server
 
-To use the OpenAI API-compatible server:
-
 1. Start the server:
 
+   For dynamic sharding:
+
    ```bash
-
-    python -m shard.openai_api --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2> [--start-layer START_LAYER] [--end-layer END_LAYER]
-
+   python -m shard.openai_api --model "mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx" --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2> --start-layer 0 --end-layer 14
    ```
 
-   Options:
-   - `--model`: Path to your model
-   - `--llm-shard-addresses`: Comma-separated list of gRPC server addresses for LLM model shards
-   - `--start-layer` (optional): Start layer index for model sharding
-   - `--end-layer` (optional): End layer index for model sharding
-   -
+   For pre-sharded model:
+
+   ```bash
+   python -m shard.openai_api --model mzbac/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx-shard-0 --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2>
+   ```
+
 2. Use the API endpoints:
    - `/v1/completions`: Text completion endpoint
    - `/v1/chat/completions`: Chat completion endpoint
@@ -96,24 +114,22 @@ curl localhost:8080/v1/chat/completions \
 
 ## Limitations and Considerations
 
-1. **Fixed Shard Configuration**: The generate script is currently set up for three shards (one local, two remote). To use more shards, you'll need to modify the script to include additional gRPC channels and adjust the `generate_step` function accordingly.
+1. **Network Dependency**: The performance of this pipeline parallelism implementation is heavily dependent on network speed and latency between machines.
 
-2. **Network Dependency**: The performance of this pipeline parallelism implementation is heavily dependent on network speed and latency between machines.
+2. **Error Handling**: The current implementation has basic error handling. In a production environment, you'd want to implement more robust error handling and recovery mechanisms.
 
-3. **Error Handling**: The current implementation has basic error handling. In a production environment, you'd want to implement more robust error handling and recovery mechanisms.
+3. **Security**: This demo uses insecure gRPC channels. For any real-world application, implement proper security measures.
 
-4. **Security**: This demo uses insecure gRPC channels. For any real-world application, implement proper security measures.
-
-5. **Shard_0 Dependency**: The generate script relies on `shard_0` for initial processing. Ensure it's available on the local machine running the script.
+4. **Shard Configuration**: Ensure that when using multiple shards, the layer ranges are set correctly to cover the entire model without overlap.
 
 ## Extending the System
 
-To extend the system for more than three shards:
+To extend the system for more shards:
 
-1. Create additional shards using `sharding_weight.py`.
+1. If pre-sharding, create additional shards using `sharding_weight.py`.
 2. Set up more server instances, one for each new shard.
-3. In `generate.py`, add more gRPC channels for the new shards.
-4. Modify the `generate_step` function to pass data through all shards in the correct order.
+3. In `generate.py` or when using the OpenAI API server, include all shard addresses.
+4. Adjust the layer ranges accordingly when using dynamic sharding.
 
 ## Requirements
 
@@ -123,3 +139,8 @@ To extend the system for more than three shards:
 - NumPy
 - Transformers library
 - Sufficient RAM on each machine to load and process its model shard
+
+## Acknowledgments
+
+- MLX team for providing the framework
+- Exo(<https://github.com/exo-explore/exo>) that I heavily inspired from for their implementation
