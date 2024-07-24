@@ -17,7 +17,7 @@ import grpc
 from mlx_lm.tokenizer_utils import TokenizerWrapper, load_tokenizer
 from mlx_lm.utils import get_model_path
 from shard.server import load_model
-from utils import create_generate_step_with_grpc
+from shard.utils import create_generate_step_with_grpc
 
 class StopCondition(NamedTuple):
     stop_met: bool

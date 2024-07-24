@@ -1,69 +1,15 @@
-import glob
-from importlib import import_module
-import json
+
 import grpc
 from concurrent import futures
 import numpy as np
 from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
+from ..utils import load_model
 import mlx.core as mx
-from mlx_lm.utils import get_model_path
-import mlx.nn as nn
 import argparse
 from mlx_lm.models.base import KVCache
 
-
 MODEL = None
 CACHE = None
-
-MODEL_REMAPPING = {
-    "mistral": "llama",  # mistral is compatible with llama
-    "phi-msft": "phixtral",
-}
-
-
-def _get_classes(config: dict):
-    model_type = config["model_type"]
-    model_type = MODEL_REMAPPING.get(model_type, model_type)
-    try:
-        arch = import_module(f".model.{model_type}", package="shard.server")
-    except ImportError:
-        msg = f"Model type {model_type} not supported."
-        print(msg)
-        raise ValueError(msg)
-
-    return arch.Model, arch.ModelArgs
-
-
-def load_model(path_or_hf_repo: str):
-    path = get_model_path(path_or_hf_repo)
-    with open(path / "config.json", "r") as f:
-        config = json.load(f)
-    weight_files = glob.glob(str(path / "*.safetensors"))
-    if not weight_files:
-        raise FileNotFoundError(f"No safetensors found in {path}")
-    weights = {}
-    for wf in weight_files:
-        weights.update(mx.load(wf))
-    model_class, model_args_class = _get_classes(config=config)
-
-    model_args = model_args_class.from_dict(config)
-    model = model_class(model_args)
-    if hasattr(model, "sanitize"):
-        weights = model.sanitize(weights)
-    if (quantization := config.get("quantization", None)) is not None:
-        def class_predicate(p, m):
-            if not hasattr(m, "to_quantized"):
-                return False
-            return f"{p}.scales" in weights
-        nn.quantize(
-            model,
-            **quantization,
-            class_predicate=class_predicate,
-        )
-    model.load_weights(list(weights.items()))
-    model.eval()
-    return model
-
 
 def reset_cache():
     global CACHE
