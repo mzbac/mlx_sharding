@@ -68,29 +68,22 @@ To use the OpenAI API-compatible server:
 1. Start the server:
 
    ```bash
-   python openai_api.py --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2>
+   python -m shard.openai_api --model /path/to/your/model --llm-shard-addresses localhost:50051,<remote_ip1>:<port1>,<remote_ip2>:<port2>
    ```
 
 2. Use the API endpoints:
    - `/v1/completions`: Text completion endpoint
    - `/v1/chat/completions`: Chat completion endpoint
 
-Example usage with Python's `requests` library:
+Example usage:
 
-```python
-import requests
-
-url = "http://localhost:8080/v1/completions"
-headers = {"Content-Type": "application/json"}
-data = {
-    "model": "your-model-name",
-    "prompt": "Once upon a time",
-    "max_tokens": 50,
-    "temperature": 0.7
-}
-
-response = requests.post(url, json=data, headers=headers)
-print(response.json())
+```bash
+curl localhost:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+     "messages": [{"role": "user", "content": "Say this is a test!"}],
+     "temperature": 0.7
+   }'
 ```
 
 ## Limitations and Considerations

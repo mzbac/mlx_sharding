@@ -13,11 +13,11 @@ import mlx.nn as nn
 from transformers import PreTrainedTokenizer
 
 import grpc
-
+from .grpc import mlx_tensor_pb2_grpc
 from mlx_lm.tokenizer_utils import TokenizerWrapper, load_tokenizer
 from mlx_lm.utils import get_model_path
-from shard.server import load_model
-from shard.utils import create_generate_step_with_grpc
+from .utils import create_generate_step_with_grpc, load_model
+
 
 class StopCondition(NamedTuple):
     stop_met: bool
@@ -29,30 +29,12 @@ def stopping_criteria(
     stop_id_sequences: List[List[int]],
     eos_token_id: Union[int, None],
 ) -> StopCondition:
-    """
-    Determines whether the token generation should stop based on predefined
-    conditions.
-
-    Args:
-        tokens (List[int]): The current sequence of generated tokens.
-        stop_id_sequences (List[List[[int]]): A list of integer lists, each
-          representing a sequence of token IDs. If the end of the `tokens`
-          list matches any of these sequences, the generation should stop.
-        eos_token_id (Union[int, None]): The token ID that represents the
-          end-of-sequence. If the last token in `tokens` matches this, the
-          generation should stop.
-
-    Returns:
-        StopCondition: A named tuple indicating whether the stop condition has
-          been met (`stop_met`) and how many tokens should be trimmed from the
-          end if it has (`trim_length`).
-    """
     if tokens and tokens[-1] == eos_token_id:
         return StopCondition(stop_met=True, trim_length=1)
 
     for stop_ids in stop_id_sequences:
         if len(tokens) >= len(stop_ids):
-            if tokens[-len(stop_ids) :] == stop_ids:
+            if tokens[-len(stop_ids):] == stop_ids:
                 return StopCondition(stop_met=True, trim_length=len(stop_ids))
 
     return StopCondition(stop_met=False, trim_length=0)
@@ -80,7 +62,6 @@ def convert_chat(messages: List[dict], role_mapping: Optional[dict] = None):
 
     prompt += role_mapping.get("assistant", "")
     return prompt.rstrip()
-
 
 class ModelProvider:
     def __init__(self, cli_args: argparse.Namespace, grpc_stubs):
@@ -119,11 +100,11 @@ class ModelProvider:
             tokenizer_config["chat_template"] = self.cli_args.chat_template
 
         if model_path == "default_model" and self.cli_args.model is not None:
-            model = load_model(self.cli_args.model)
+            model = load_model(self.cli_args.model, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
             tokenizer = load_tokenizer(get_model_path(self.cli_args.model), tokenizer_config)
         else:
             self._validate_model_path(model_path)
-            model = load_model(model_path)
+            model = load_model(model_path, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
             tokenizer = load_tokenizer(get_model_path(model_path), tokenizer_config)
 
         if self.cli_args.use_default_chat_template:
@@ -137,12 +118,8 @@ class ModelProvider:
 
         return self.model, self.tokenizer, self.generate_step
 
-
 class APIHandler(BaseHTTPRequestHandler):
     def __init__(self, model_provider: ModelProvider, *args, **kwargs):
-        """
-        Create static request specific metadata
-        """
         self.created = int(time.time())
         self.model_provider = model_provider
         super().__init__(*args, **kwargs)
@@ -188,7 +165,8 @@ class APIHandler(BaseHTTPRequestHandler):
         raw_body = self.rfile.read(content_length)
         self.body = json.loads(raw_body.decode())
         indent = "\t"  # Backslashes can't be inside of f-strings
-        logging.debug(f"Incoming Request Body: {json.dumps(self.body, indent=indent)}")
+        logging.debug(f"Incoming Request Body: {
+                      json.dumps(self.body, indent=indent)}")
         assert isinstance(
             self.body, dict
         ), f"Request should be dict, but got {type(self.body)}"
@@ -200,15 +178,16 @@ class APIHandler(BaseHTTPRequestHandler):
         self.temperature = self.body.get("temperature", 1.0)
         self.top_p = self.body.get("top_p", 1.0)
         self.repetition_penalty = self.body.get("repetition_penalty", 1.0)
-        self.repetition_context_size = self.body.get("repetition_context_size", 20)
+        self.repetition_context_size = self.body.get(
+            "repetition_context_size", 20)
         self.logit_bias = self.body.get("logit_bias", None)
         self.logprobs = self.body.get("logprobs", -1)
         self.validate_model_parameters()
 
-
         # Load the model if needed
         try:
-            self.model, self.tokenizer, self.generate_step = self.model_provider.load(self.requested_model)
+            self.model, self.tokenizer, self.generate_step = self.model_provider.load(
+                self.requested_model)
         except:
             self._set_completion_headers(404)
             self.end_headers()
@@ -218,7 +197,8 @@ class APIHandler(BaseHTTPRequestHandler):
         # Get stop id sequences, if provided
         stop_words = self.body.get("stop")
         stop_words = stop_words or []
-        stop_words = [stop_words] if isinstance(stop_words, str) else stop_words
+        stop_words = [stop_words] if isinstance(
+            stop_words, str) else stop_words
         stop_id_sequences = [
             self.tokenizer.encode(stop_word, add_special_tokens=False)
             for stop_word in stop_words
@@ -239,9 +219,6 @@ class APIHandler(BaseHTTPRequestHandler):
         method(prompt, stop_id_sequences)
 
     def validate_model_parameters(self):
-        """
-        Validate the model parameters passed in the request for the correct types and values.
-        """
         if not isinstance(self.stream, bool):
             raise ValueError("stream must be a boolean")
 
@@ -269,14 +246,16 @@ class APIHandler(BaseHTTPRequestHandler):
             not isinstance(self.repetition_context_size, int)
             or self.repetition_context_size < 0
         ):
-            raise ValueError("repetition_context_size must be a non-negative integer")
+            raise ValueError(
+                "repetition_context_size must be a non-negative integer")
 
         if self.logit_bias is not None:
             if not isinstance(self.logit_bias, dict):
                 raise ValueError("logit_bias must be a dict of int to float")
 
             try:
-                self.logit_bias = {int(k): v for k, v in self.logit_bias.items()}
+                self.logit_bias = {
+                    int(k): v for k, v in self.logit_bias.items()}
             except ValueError:
                 raise ValueError("logit_bias must be a dict of int to float")
 
@@ -293,28 +272,6 @@ class APIHandler(BaseHTTPRequestHandler):
         top_tokens: Optional[List[Dict[int, float]]] = None,
         tokens: Optional[List[int]] = None,
     ) -> dict:
-        """
-        Generate a single response packet based on response type (stream or
-        not), completion type and parameters.
-
-        Args:
-            text (str): Text generated by model
-            finish_reason (Union[Literal["length", "stop"], None]): The reason the
-              response is being sent: "length", "stop" or `None`.
-            prompt_token_count (Optional[int]): The number of tokens in the prompt,
-              used to populate the "usage" field (not used when stream).
-            completion_token_count (Optional[int]): The number of tokens in the
-              response, used to populate the "usage" field (not used when stream).
-            token_logprobs (Optional[List[float]]): The log probabilities per token,
-              in token order.
-            top_tokens (Optional[List[Dict[int, float]]]): List of dictionaries mapping
-              tokens to logprobs for the top N tokens at each token position.
-            tokens (Optional[List[int]]): List of tokens to return with logprobs structure
-
-        Returns:
-            dict: A dictionary containing the response, in the same format as
-              OpenAI's API.
-        """
         token_logprobs = token_logprobs if token_logprobs else []
         top_logprobs = top_tokens if top_tokens else []
 
@@ -371,14 +328,6 @@ class APIHandler(BaseHTTPRequestHandler):
         prompt: mx.array,
         stop_id_sequences: List[List[int]],
     ):
-        """
-        Generate a response to a prompt and send it to the client in a single batch.
-
-        Args:
-            prompt (mx.array): The prompt, in token form inside of a mlx array
-            stop_id_sequences (List[List[int]]): A list of stop words passed
-              to the stopping_criteria function
-        """
         detokenizer = self.tokenizer.detokenizer
         detokenizer.reset()
         tokens = []
@@ -404,10 +353,12 @@ class APIHandler(BaseHTTPRequestHandler):
             tokens.append(token)
 
             if self.logprobs > 0:
-                sorted_indices = mx.argpartition(-logprobs, kth=self.logprobs - 1)
+                sorted_indices = mx.argpartition(-logprobs,
+                                                 kth=self.logprobs - 1)
                 top_indices = sorted_indices[: self.logprobs]
                 top_logprobs = logprobs[top_indices]
-                top_token_info = zip(top_indices.tolist(), top_logprobs.tolist())
+                top_token_info = zip(top_indices.tolist(),
+                                     top_logprobs.tolist())
                 top_tokens.append(dict(top_token_info))
 
             token_logprobs.append(logprobs[token].item())
@@ -419,7 +370,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 finish_reason = "stop"
                 if stop_condition.trim_length:
                     stop_sequence_suffix = self.tokenizer.decode(
-                        tokens[-stop_condition.trim_length :]
+                        tokens[-stop_condition.trim_length:]
                     )
                 break
 
@@ -441,7 +392,8 @@ class APIHandler(BaseHTTPRequestHandler):
 
         response_json = json.dumps(response).encode()
         indent = "\t"  # Backslashes can't be inside of f-strings
-        logging.debug(f"Outgoing Response: {json.dumps(response, indent=indent)}")
+        logging.debug(f"Outgoing Response: {
+                      json.dumps(response, indent=indent)}")
 
         # Send an additional Content-Length header when it is known
         self.send_header("Content-Length", str(len(response_json)))
@@ -455,14 +407,6 @@ class APIHandler(BaseHTTPRequestHandler):
         prompt: mx.array,
         stop_id_sequences: List[List[int]],
     ):
-        """
-        Generate response to prompt and foward it to the client using a Server Sent Events (SSE) stream.
-
-        Args:
-            prompt (mx.array): The prompt, in token form inside of a mlx array
-            stop_id_sequences (List[List[int]]):
-                A list of stop words passed to the stopping_criteria function
-        """
         # No additional headers are needed, call end_headers
         self.end_headers()
 
@@ -504,7 +448,7 @@ class APIHandler(BaseHTTPRequestHandler):
             if stop_condition.stop_met:
                 if stop_condition.trim_length:
                     stop_sequence_suffix = self.tokenizer.decode(
-                        tokens[-stop_condition.trim_length :]
+                        tokens[-stop_condition.trim_length:]
                     )
                 break
 
@@ -530,12 +474,6 @@ class APIHandler(BaseHTTPRequestHandler):
         self.wfile.flush()
 
     def handle_chat_completions(self) -> mx.array:
-        """
-        Handle a chat completion request.
-
-        Returns:
-            mx.array: A mx.array of the tokenized prompt from the request body
-        """
         body = self.body
         assert "messages" in body, "Request did not contain messages"
 
@@ -561,12 +499,6 @@ class APIHandler(BaseHTTPRequestHandler):
         return mx.array(prompt)
 
     def handle_text_completions(self) -> mx.array:
-        """
-        Handle a text completion request.
-
-        Returns:
-            mx.array: A mx.array of the tokenized prompt from the request body
-        """
         # Determine response type
         self.request_id = f"cmpl-{uuid.uuid4()}"
         self.object_type = "text_completion"
@@ -653,10 +585,25 @@ def main():
         help="Use the default chat template",
     )
     parser.add_argument(
-        "--llm-shard-addresses", "-s",
+        "-s",
+        "--llm-shard-addresses",
         type=str,
         default="localhost:50051",
         help="Comma-separated list of gRPC server addresses for LLM model shards (default: localhost:50051)",
+    )
+    parser.add_argument(
+        "-sl",
+        "--start-layer",
+        type=int,
+        default=None,
+        help="Start layer index for model sharding (optional)",
+    )
+    parser.add_argument(
+        "-el",
+        "--end-layer",
+        type=int,
+        default=None,
+        help="End layer index for model sharding (optional)",
     )
     args = parser.parse_args()
 
@@ -674,16 +621,19 @@ def main():
         ('grpc.max_send_message_length', 128 * 1024 * 1024),
         ('grpc.max_receive_message_length', 128 * 1024 * 1024),
     ]
-    
+
     shard_addresses = [addr.strip() for addr in args.llm_shard_addresses.split(',')]
     grpc_stubs = []
-    
+
     for addr in shard_addresses:
         channel = grpc.insecure_channel(addr, options=channel_options)
         stub = mlx_tensor_pb2_grpc.MLXTensorServiceStub(channel)
         grpc_stubs.append(stub)
-    
+
     logging.info(f"Connected to {len(grpc_stubs)} LLM shard(s)")
+
+    if args.start_layer is not None or args.end_layer is not None:
+        logging.info(f"Loading model with layers {args.start_layer or 0} to {args.end_layer or 'end'}")
 
     model_provider = ModelProvider(args, grpc_stubs)
     run(args.host, args.port, model_provider)

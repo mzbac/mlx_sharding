@@ -85,9 +85,9 @@ class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
             )
 
 
-def serve(model_path):
+def serve(model_path, start_layer=None, end_layer=None):
     global MODEL
-    MODEL = load_model(model_path)
+    MODEL = load_model(model_path, start_layer=start_layer, end_layer=end_layer)
     reset_cache()
     server_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
@@ -102,13 +102,7 @@ def serve(model_path):
     port = server.add_insecure_port('[::]:0')
     server.start()
     print(f"Server started, listening on 0.0.0.0:{port}")
+    if start_layer is not None or end_layer is not None:
+        print(f"Model loaded with layers {start_layer or 0} to {end_layer or 'end'}")
     server.wait_for_termination()
 
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="MLX Tensor Server")
-    parser.add_argument("--model", type=str, required=True,
-                        help="Path to the model or HuggingFace repo")
-    args = parser.parse_args()
-
-    serve(args.model)

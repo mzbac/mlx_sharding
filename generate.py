@@ -5,7 +5,7 @@ from shard.grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 from transformers import AutoTokenizer
 import numpy as np
 import mlx.core as mx
-from shard.server.server import load_model
+from shard.utils import load_model
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.models.base import KVCache
 import time
