@@ -1,12 +1,12 @@
 from dataclasses import dataclass
-from typing import Optional 
 
 import mlx.core as mx
 import mlx.nn as nn
 
-from mlx_lm.models.base import KVCache, create_additive_causal_mask
-from mlx_lm.models.llama import TransformerBlock, ModelArgs 
+from mlx_lm.models.base import create_additive_causal_mask
+from mlx_lm.models.llama import TransformerBlock, ModelArgs
 from .base import IdentityBlock
+
 
 @dataclass
 class ModelArgs(ModelArgs):

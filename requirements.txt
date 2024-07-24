@@ -1,5 +1,5 @@
 mlx
-mlx_lm
+mlx_lm>=0.16.1
 numpy
 grpcio
 grpcio-tools
