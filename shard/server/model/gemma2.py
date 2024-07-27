@@ -40,10 +40,10 @@ class GemmaModel(nn.Module):
     ):
         if self.start_layer == 0:
             h = self.embed_tokens(inputs)
+            h = h * (self.args.hidden_size**0.5)
         else:
             h = inputs
         
-        h = h * (self.args.hidden_size**0.5)
 
         mask = None
         if h.shape[1] > 1:
