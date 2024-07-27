@@ -5,7 +5,6 @@ import numpy as np
 from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 from ..utils import load_model
 import mlx.core as mx
-import argparse
 from mlx_lm.models.base import KVCache
 
 MODEL = None
@@ -91,8 +90,8 @@ def serve(model_path, start_layer=None, end_layer=None):
     reset_cache()
     server_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
-        ('grpc.max_send_message_length', 128 * 1024 * 1024),
-        ('grpc.max_receive_message_length', 128 * 1024 * 1024),
+        ('grpc.max_send_message_length', 1280 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 1280 * 1024 * 1024),
     ]
     server = grpc.server(futures.ThreadPoolExecutor(
         max_workers=10), options=server_options)

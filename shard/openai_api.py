@@ -557,6 +557,8 @@ def run(
         "it only implements basic security checks."
     )
     logging.info(f"Starting httpd at {host} on port {port}...")
+    print(f"A web-based UI is available at http://{host}:{port}")
+    print("Press Ctrl+C to stop the server.")
     httpd.serve_forever()
 
 
@@ -655,8 +657,8 @@ def main():
 
     channel_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
-        ('grpc.max_send_message_length', 128 * 1024 * 1024),
-        ('grpc.max_receive_message_length', 128 * 1024 * 1024),
+        ('grpc.max_send_message_length', 1280 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 1280 * 1024 * 1024),
     ]
 
     shard_addresses = [addr.strip()

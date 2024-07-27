@@ -27,7 +27,6 @@ def _get_classes(config: dict):
 
     return arch.Model, arch.ModelArgs
 
-
 def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = None):
     path = get_model_path(path_or_hf_repo)
     with open(path / "config.json", "r") as f:
@@ -54,7 +53,7 @@ def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = N
                 layer_num = int(key.split('.')[2])
                 if start_layer <= layer_num < end_layer:
                     shard_state_dict[key] = value
-            elif start_layer == 0 and key.startswith('model.embed_tokens'):
+            elif (start_layer == 0 or end_layer == total_layers)  and key.startswith('model.embed_tokens'):
                 shard_state_dict[key] = value
             elif end_layer == total_layers and (key.startswith('model.norm') or key.startswith('lm_head')):
                 shard_state_dict[key] = value
@@ -63,6 +62,7 @@ def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = N
 
     if hasattr(model, "sanitize"):
         weights = model.sanitize(weights)
+    
     if (quantization := config.get("quantization", None)) is not None:
         def class_predicate(p, m):
             if not hasattr(m, "to_quantized"):

@@ -15,7 +15,7 @@ static_files = package_files('static')
 
 setup(
     name="mlx-sharding",
-    version="0.1.1",
+    version="0.1.2",
     author="Anchen",
     author_email="li.anchen.au@gmail.com",
     description="A package for MLX model sharding and distributed inference",
