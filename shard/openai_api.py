@@ -657,8 +657,8 @@ def main():
 
     channel_options = [
         ('grpc.max_metadata_size', 32 * 1024 * 1024),
-        ('grpc.max_send_message_length', 128 * 1024 * 1024),
-        ('grpc.max_receive_message_length', 128 * 1024 * 1024),
+        ('grpc.max_send_message_length', 1280 * 1024 * 1024),
+        ('grpc.max_receive_message_length', 1280 * 1024 * 1024),
     ]
 
     shard_addresses = [addr.strip()
