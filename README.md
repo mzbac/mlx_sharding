@@ -8,6 +8,32 @@ To see the distributed inference in action, check out our demo video:
 
 [Sharding DeepSeek-Coder-V2-Lite-Instruct Demo](https://www.youtube.com/watch?v=saOboSfP76o)
 
+## Quick Start
+
+### Installation
+
+Install the package using pip:
+
+```bash
+pip install mlx-sharding
+```
+
+### Running the Servers
+
+1. For the shard node:
+
+   ```bash
+   mlx-sharding-server --model mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx --start-layer 14 --end-layer 27
+   ```
+
+2. For the primary node:
+
+   ```bash
+   mlx-sharding-api --model mlx-community/DeepSeek-Coder-V2-Lite-Instruct-4bit-mlx --start-layer 0 --end-layer 14 --llm-shard-addresses <your shard node address>
+   ```
+
+   Replace `<your shard node address>` with the actual address of your shard node (e.g., `localhost:50051`).
+
 ## Educational Purpose
 
 This repository is designed for educational purposes to illustrate how pipeline parallelism can be implemented in MLX. It provides a basic framework for:
@@ -112,6 +138,18 @@ curl localhost:8080/v1/chat/completions \
    }'
 ```
 
+### 5. Web User Interface
+
+This project now includes a web-based user interface for easy interaction with the model. To use the UI:
+
+1. Ensure the OpenAI API-compatible server is running (as described in step 4).
+
+2. Navigate to `http://localhost:8080` (or the appropriate host and port if you've configured it differently) in your web browser.
+
+3. Use the interface to input prompts, adjust parameters, and view the model's responses.
+
+The UI provides a user-friendly way to interact with the model, making it easier to experiment with different inputs and settings without needing to use command-line tools or write code.
+
 ## Limitations and Considerations
 
 1. **Network Dependency**: The performance of this pipeline parallelism implementation is heavily dependent on network speed and latency between machines.
@@ -143,4 +181,4 @@ To extend the system for more shards:
 ## Acknowledgments
 
 - MLX team for providing the framework
-- Exo(<https://github.com/exo-explore/exo>) that I heavily inspired from for their implementation
+- Exo(<https://github.com/exo-explore/exo>) that I heavily inspired from for their implementation of pipeline parallelism
