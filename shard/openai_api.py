@@ -1,6 +1,8 @@
 import argparse
 import json
 import logging
+import mimetypes
+import os
 import time
 import uuid
 import warnings
@@ -63,6 +65,7 @@ def convert_chat(messages: List[dict], role_mapping: Optional[dict] = None):
     prompt += role_mapping.get("assistant", "")
     return prompt.rstrip()
 
+
 class ModelProvider:
     def __init__(self, cli_args: argparse.Namespace, grpc_stubs):
         """Load models on demand and persist them across the whole process."""
@@ -100,12 +103,16 @@ class ModelProvider:
             tokenizer_config["chat_template"] = self.cli_args.chat_template
 
         if model_path == "default_model" and self.cli_args.model is not None:
-            model = load_model(self.cli_args.model, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
-            tokenizer = load_tokenizer(get_model_path(self.cli_args.model), tokenizer_config)
+            model = load_model(
+                self.cli_args.model, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
+            tokenizer = load_tokenizer(get_model_path(
+                self.cli_args.model), tokenizer_config)
         else:
             self._validate_model_path(model_path)
-            model = load_model(model_path, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
-            tokenizer = load_tokenizer(get_model_path(model_path), tokenizer_config)
+            model = load_model(
+                model_path, start_layer=self.cli_args.start_layer, end_layer=self.cli_args.end_layer)
+            tokenizer = load_tokenizer(
+                get_model_path(model_path), tokenizer_config)
 
         if self.cli_args.use_default_chat_template:
             if tokenizer.chat_template is None:
@@ -118,10 +125,12 @@ class ModelProvider:
 
         return self.model, self.tokenizer, self.generate_step
 
+
 class APIHandler(BaseHTTPRequestHandler):
-    def __init__(self, model_provider: ModelProvider, *args, **kwargs):
+    def __init__(self, model_provider: ModelProvider, static_dir: str,  *args, **kwargs):
         self.created = int(time.time())
         self.model_provider = model_provider
+        self.static_dir = static_dir
         super().__init__(*args, **kwargs)
 
     def _set_cors_headers(self):
@@ -143,6 +152,27 @@ class APIHandler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self._set_completion_headers(204)
         self.end_headers()
+
+    def do_GET(self):
+        full_path = os.path.join(self.static_dir, self.path.lstrip('/'))
+
+        if os.path.isdir(full_path):
+            full_path = os.path.join(full_path, 'index.html')
+
+        if not os.path.exists(full_path):
+            self.send_error(404, "File not found")
+            return
+
+        _, ext = os.path.splitext(full_path)
+        content_type = mimetypes.types_map.get(ext, 'application/octet-stream')
+
+        self.send_response(200)
+        self.send_header("Content-type", content_type)
+        self._set_cors_headers()
+        self.end_headers()
+
+        with open(full_path, 'rb') as file:
+            self.wfile.write(file.read())
 
     def do_POST(self):
         """
@@ -513,13 +543,14 @@ def run(
     host: str,
     port: int,
     model_provider: ModelProvider,
+    static_dir: str,
     server_class=HTTPServer,
     handler_class=APIHandler,
 ):
     server_address = (host, port)
     httpd = server_class(
         server_address,
-        lambda *args, **kwargs: handler_class(model_provider, *args, **kwargs),
+        lambda *args, **kwargs: handler_class(model_provider, static_dir, *args, **kwargs),
     )
     warnings.warn(
         "mlx_lm.server is not recommended for production as "
@@ -605,6 +636,12 @@ def main():
         default=None,
         help="End layer index for model sharding (optional)",
     )
+    parser.add_argument(
+        "--static-dir",
+        type=str,
+        default="./static",
+        help="Directory for static files (default: ./static)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -622,7 +659,8 @@ def main():
         ('grpc.max_receive_message_length', 128 * 1024 * 1024),
     ]
 
-    shard_addresses = [addr.strip() for addr in args.llm_shard_addresses.split(',')]
+    shard_addresses = [addr.strip()
+                       for addr in args.llm_shard_addresses.split(',')]
     grpc_stubs = []
 
     for addr in shard_addresses:
@@ -633,10 +671,12 @@ def main():
     logging.info(f"Connected to {len(grpc_stubs)} LLM shard(s)")
 
     if args.start_layer is not None or args.end_layer is not None:
-        logging.info(f"Loading model with layers {args.start_layer or 0} to {args.end_layer or 'end'}")
+        logging.info(f"Loading model with layers {
+                     args.start_layer or 0} to {args.end_layer or 'end'}")
 
     model_provider = ModelProvider(args, grpc_stubs)
-    run(args.host, args.port, model_provider)
+    run(args.host, args.port, model_provider, args.static_dir)
+
 
 if __name__ == "__main__":
     main()

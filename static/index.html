@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Open Chat</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <!-- Left Panel -->
+      <div class="left-panel">
+        <div class="controls-container">
+          <!-- Toggle for Chat History -->
+          <label class="switch">
+            <input type="checkbox" id="chat-history-toggle" />
+            <span class="slider round"></span>
+          </label>
+          <p>Chat History</p>
+
+          <!-- Toggle for Settings -->
+          <label class="switch">
+            <input type="checkbox" id="settings-toggle" />
+            <span class="slider round"></span>
+          </label>
+          <p>Settings</p>
+
+          <button class="clear-button">Clear All Chats</button>
+          <button class="history-button">New Conversation</button>
+        </div>
+        <div class="sessions-container hidden">
+          <h2>Chats</h2>
+          <div class="session-list"></div>
+        </div>
+      </div>
+
+      <!-- Settings Container -->
+      <div class="settings-container hidden">
+        <h2>Settings</h2>
+        <label for="endpoint">Endpoint URL:</label>
+        <input type="text" id="endpoint" placeholder="Enter endpoint URL" />
+        <label for="apiKey">API Key:</label>
+        <input type="text" id="apiKey" placeholder="Enter your API Key" />
+        <label for="stopWord">Stop Word:</label>
+        <input type="text" id="stopWord" placeholder="Enter stop word" />
+        <label for="maxTokens">Max Tokens:</label>
+        <input type="number" id="maxTokens" placeholder="Enter max tokens" />
+        <label for="model">Model:</label>
+        <input type="text" id="model" placeholder="Enter model" />
+        <label for="temperature">Temperature:</label>
+        <input
+          type="number"
+          id="temperature"
+          placeholder="Enter temperature"
+          step="0.1"
+          min="0"
+          max="1"
+        />
+        <label for="topP">Top P:</label>
+        <input
+          type="number"
+          id="topP"
+          placeholder="Enter top p"
+          step="0.1"
+          min="0"
+          max="1"
+        />
+        <button id="saveSettings">Save Settings</button>
+      </div>
+
+      <!-- Chat Container -->
+      <div class="chat-container">
+        <div class="chat-history"></div>
+        <div class="input-container">
+          <textarea type="text" placeholder="Type your message..."></textarea>
+          <button>Send</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

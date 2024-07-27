@@ -1,0 +1,245 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    height: 100vh;
+  }
+  
+  .app {
+    width: 100%;
+    max-width: 1500px;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+  }
+  
+  .left-panel {
+    width: 200px;
+    background-color: #f8f9fa;
+    padding: 20px;
+    border-right: 1px solid #e0e0e0;
+    box-shadow: -1px 0 5px rgba(0, 0, 0, 0.05);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .controls-container {
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+  
+  .controls-container button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  
+  .controls-container button:hover {
+    background-color: #0056b3;
+  }
+  
+  .clear-button {
+    background-color: #ff4b4b;
+  }
+  
+  .clear-button:hover {
+    background-color: #d32f2f;
+  }
+  
+  .sessions-container {
+    flex-grow: 1;
+    overflow-y: auto;
+  }
+  
+  .session-list .session {
+    padding: 10px;
+    margin-top: 5px;
+    background-color: #e0e0e0;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+  }
+  
+  .session-list .session:hover {
+    background-color: #d0d0d0;
+  }
+  
+  .settings-container {
+    padding: 20px;
+    border-left: 1px solid #e0e0e0;
+    overflow-y: auto;
+  }
+  
+  .settings-container label {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 5px;
+  }
+  
+  .settings-container input[type="text"],
+  .settings-container input[type="number"] {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+  }
+  
+  .settings-container button {
+    width: 100%;
+    padding: 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    margin-top: 10px;
+  }
+  
+  .settings-container button:hover {
+    background-color: #0056b3;
+  }
+  
+  .chat-container {
+    flex-grow: 3;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .chat-history {
+    flex: 1;
+    overflow-y: auto;
+    margin: 10px;
+    background-color: #ffffff;
+    border: 1px solid #e0e0e0;
+  }
+  .message {
+    margin: 10px;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #f4f4f4;
+    word-wrap: break-word;
+    line-height: 1.8;
+  }
+  .user {
+    align-self: flex-end;
+    background-color: #dcf8c6;
+  }
+  .assistant {
+    align-self: flex-start;
+  }
+  .input-container {
+    display: flex;
+    padding: 10px;
+    align-items: center;
+    border-top: 1px solid #e0e0e0;
+  }
+  
+  .input-container textarea {
+    flex-grow: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-right: 10px;
+    font-size: 16px;
+  }
+  
+  .input-container button {
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+  }
+  
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 34px;
+  }
+  
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
+  }
+  
+  input:checked + .slider {
+    background-color: #2196f3;
+  }
+  
+  input:focus + .slider {
+    box-shadow: 0 0 1px #2196f3;
+  }
+  
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
+  
+  .settings-container {
+    transition: transform 0.3s ease-in-out;
+    transform: translateX(0);
+  }
+  
+  .hidden {
+    display: none;
+  }
+  
+  .regenerate-button {
+    bottom: 5px;
+    right: 5px;
+    padding: 5px 10px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  
+  .regenerate-button:hover {
+    background-color: #45a049;
+  }
