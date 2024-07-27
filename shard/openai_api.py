@@ -1,4 +1,5 @@
 import argparse
+import pkg_resources
 import json
 import logging
 import mimetypes
@@ -641,7 +642,7 @@ def main():
     parser.add_argument(
         "--static-dir",
         type=str,
-        default="./static",
+        default=None,
         help="Directory for static files (default: ./static)",
     )
     args = parser.parse_args()
@@ -675,6 +676,8 @@ def main():
     if args.start_layer is not None or args.end_layer is not None:
         logging.info(f"Loading model with layers {
                      args.start_layer or 0} to {args.end_layer or 'end'}")
+    if args.static_dir is None:
+        args.static_dir = pkg_resources.resource_filename('shard', 'static')
 
     model_provider = ModelProvider(args, grpc_stubs)
     run(args.host, args.port, model_provider, args.static_dir)

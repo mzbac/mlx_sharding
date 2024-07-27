@@ -4,18 +4,9 @@ import os
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-def package_files(directory):
-    paths = []
-    for (path, directories, filenames) in os.walk(directory):
-        for filename in filenames:
-            paths.append(os.path.join('..', path, filename))
-    return paths
-
-static_files = package_files('static')
-
 setup(
     name="mlx-sharding",
-    version="0.1.2",
+    version="0.1.3",
     author="Anchen",
     author_email="li.anchen.au@gmail.com",
     description="A package for MLX model sharding and distributed inference",
@@ -41,7 +32,6 @@ setup(
     },
     include_package_data=True,
     package_data={
-        "shard": ["protos/*.proto"],
-        "": static_files, 
+        "shard": ["protos/*.proto", "static/*"],
     },
 )
