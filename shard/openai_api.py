@@ -557,6 +557,8 @@ def run(
         "it only implements basic security checks."
     )
     logging.info(f"Starting httpd at {host} on port {port}...")
+    print(f"A web-based UI is available at http://{host}:{port}")
+    print("Press Ctrl+C to stop the server.")
     httpd.serve_forever()
 
 

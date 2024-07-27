@@ -5,7 +5,6 @@ import numpy as np
 from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 from ..utils import load_model
 import mlx.core as mx
-import argparse
 from mlx_lm.models.base import KVCache
 
 MODEL = None
