@@ -85,6 +85,22 @@ class Model(nn.Module):
         else:
             return out
 
+    def sanitize(self, weights):
+        total_layers = len(self.layers)
+        shard_state_dict = {}
+        for key, value in weights.items():
+            if "self_attn.rotary_emb.inv_freq" in key:
+                continue
+            if key.startswith('model.layers.'):
+                layer_num = int(key.split('.')[2])
+                if self.start_layer <= layer_num < self.end_layer:
+                    shard_state_dict[key] = value
+            elif (self.start_layer == 0 or self.end_layer == total_layers)  and key.startswith('model.embed_tokens'):
+                shard_state_dict[key] = value
+            elif self.end_layer == total_layers and (key.startswith('model.norm') or key.startswith('lm_head')):
+                shard_state_dict[key] = value
+        
+        return shard_state_dict
     @property
     def layers(self):
         return self.model.layers

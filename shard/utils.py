@@ -44,21 +44,6 @@ def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = N
 
     model_args = model_args_class.from_dict(config)
     model = model_class(model_args)
-    total_layers = len(model.layers)
-
-    if start_layer is not None and end_layer is not None:
-        shard_state_dict = {}
-        for key, value in weights.items():
-            if key.startswith('model.layers.'):
-                layer_num = int(key.split('.')[2])
-                if start_layer <= layer_num < end_layer:
-                    shard_state_dict[key] = value
-            elif (start_layer == 0 or end_layer == total_layers)  and key.startswith('model.embed_tokens'):
-                shard_state_dict[key] = value
-            elif end_layer == total_layers and (key.startswith('model.norm') or key.startswith('lm_head')):
-                shard_state_dict[key] = value
-        
-        weights = shard_state_dict
 
     if hasattr(model, "sanitize"):
         weights = model.sanitize(weights)

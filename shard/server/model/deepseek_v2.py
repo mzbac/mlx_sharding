@@ -84,18 +84,34 @@ class Model(nn.Module):
         return out
 
     def sanitize(self, weights):
+        total_layers = len(self.layers)
+        shard_state_dict = {}
+        for key, value in weights.items():
+            if "self_attn.rotary_emb.inv_freq" in key:
+                continue
+            if key.startswith('model.layers.'):
+                layer_num = int(key.split('.')[2])
+                if self.start_layer <= layer_num < self.end_layer:
+                    shard_state_dict[key] = value
+            elif self.start_layer == 0 and key.startswith('model.embed_tokens'):
+                shard_state_dict[key] = value
+            elif self.end_layer == total_layers and (key.startswith('model.norm') or key.startswith('lm_head')):
+                shard_state_dict[key] = value
+
         for l in range(self.args.num_hidden_layers):
             prefix = f"model.layers.{l}"
             for n, m in [("w1", "gate_proj"), ("w2", "down_proj"), ("w3", "up_proj")]:
                 for k in ["weight", "scales", "biases"]:
-                    if f"{prefix}.mlp.experts.0.{m}.{k}" in weights:
+                    if f"{prefix}.mlp.experts.0.{m}.{k}" in shard_state_dict:
                         to_join = [
-                            weights.pop(f"{prefix}.mlp.experts.{e}.{m}.{k}")
+                            shard_state_dict.pop(f"{prefix}.mlp.experts.{e}.{m}.{k}")
                             for e in range(self.args.n_routed_experts)
                         ]
-                        weights[f"{prefix}.mlp.switch_mlp.{
+                        shard_state_dict[f"{prefix}.mlp.switch_mlp.{
                             m}.{k}"] = mx.stack(to_join)
-        return weights
+                total_layers = len(self.layers)
+        
+        return shard_state_dict
 
     @ property
     def layers(self):
