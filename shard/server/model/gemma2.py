@@ -56,7 +56,7 @@ class GemmaModel(nn.Module):
         for layer, c in zip(self.layers, cache):
             h = layer(h, mask, c)
 
-        h = h.astype(mx.bfloat16)
+        h = h.astype(mx.float16)
         if self.end_layer == self.num_hidden_layers:
             h = self.norm(h)
         return h
@@ -82,6 +82,7 @@ class Model(nn.Module):
             out = self.model.embed_tokens.as_linear(out)
             out = mx.tanh(out / self.final_logit_softcapping)
             out = out * self.final_logit_softcapping
+            out = out.astype(mx.float16)
             return out
         else:
             return out
