@@ -3,9 +3,8 @@ from typing import Tuple, List
 import grpc
 from shard.grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
 from transformers import AutoTokenizer
-import numpy as np
 import mlx.core as mx
-from shard.utils import load_model
+from shard.utils import load_model, response_to_mlx_array, send_tensor
 from mlx_lm.tokenizer_utils import TokenizerWrapper
 from mlx_lm.models.base import KVCache
 import time
@@ -50,34 +49,6 @@ def main():
         print(t, end="", flush=True)
     print()
 
-def send_tensor(stub, tensor: np.ndarray):
-    tensor_bytes = tensor.tobytes()
-    tensor_message = mlx_tensor_pb2.Tensor(
-        tensor_data=tensor_bytes,
-        shape=list(tensor.shape),
-        dtype=str(tensor.dtype)
-    )
-    response = stub.SendTensor(tensor_message)
-    return response
-
-def response_to_mlx_array(response):
-    try:
-        tensor_data = response.tensor_data
-        shape = response.shape
-        dtype_str = response.dtype
-        dtype_map = {
-            'float32': np.float32, 'int32': np.int32,
-            'float64': np.float64, 'int64': np.int64,
-            "float16": np.float16,
-        }
-        np_dtype = dtype_map.get(dtype_str, np.float32)
-        np_array = np.frombuffer(tensor_data, dtype=np_dtype).reshape(shape)
-        mx_dtype = getattr(mx, dtype_str, mx.float32)
-        tensor = mx.array(np_array, dtype=mx_dtype)
-        return tensor
-    except Exception as e:
-        return None
-
 def generate_step(prompt, model, stubs: List[mlx_tensor_pb2_grpc.MLXTensorServiceStub]):
     def sample(logits: mx.array) -> Tuple[mx.array, float]:
         return mx.argmax(logits, axis=-1)
@@ -99,7 +70,7 @@ def generate_step(prompt, model, stubs: List[mlx_tensor_pb2_grpc.MLXTensorServic
             output = output.astype(mx.float16)
         
         for i, stub in enumerate(stubs):
-            response = send_tensor(stub, np.array(output))
+            response = send_tensor(stub, output)
             output = response_to_mlx_array(response.tensor)
             if i == len(stubs) - 1:  # Last stub
                 logits = output[:, -1, :]

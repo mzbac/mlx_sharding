@@ -1,19 +1,20 @@
 from importlib import import_module
 import glob
 import json
+import struct
 import mlx.core as mx
 import mlx.nn as nn
 from typing import Dict, Generator, Optional, Tuple, List
 from mlx_lm.models.base import KVCache
 from mlx_lm.sample_utils import top_p_sampling
 from mlx_lm.utils import apply_repetition_penalty, get_model_path
-import numpy as np
 from .grpc import mlx_tensor_pb2
 
 MODEL_REMAPPING = {
     "mistral": "llama",  # mistral is compatible with llama
     "phi-msft": "phixtral",
 }
+
 
 def _get_classes(config: dict):
     model_type = config["model_type"]
@@ -27,13 +28,14 @@ def _get_classes(config: dict):
 
     return arch.Model, arch.ModelArgs
 
+
 def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = None):
     path = get_model_path(path_or_hf_repo)
     with open(path / "config.json", "r") as f:
         config = json.load(f)
         if start_layer is not None and end_layer is not None:
-            config['start_layer'] = start_layer
-            config['end_layer'] = end_layer
+            config["start_layer"] = start_layer
+            config["end_layer"] = end_layer
     weight_files = glob.glob(str(path / "*.safetensors"))
     if not weight_files:
         raise FileNotFoundError(f"No safetensors found in {path}")
@@ -47,12 +49,14 @@ def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = N
 
     if hasattr(model, "sanitize"):
         weights = model.sanitize(weights)
-    
+
     if (quantization := config.get("quantization", None)) is not None:
+
         def class_predicate(p, m):
             if not hasattr(m, "to_quantized"):
                 return False
             return f"{p}.scales" in weights
+
         nn.quantize(
             model,
             **quantization,
@@ -63,12 +67,9 @@ def load_model(path_or_hf_repo: str, start_layer: int = None, end_layer: int = N
     return model
 
 
-def send_tensor(stub, tensor: np.ndarray):
-    tensor_bytes = tensor.tobytes()
+def send_tensor(stub, tensor: mx.array):
     tensor_message = mlx_tensor_pb2.Tensor(
-        tensor_data=tensor_bytes,
-        shape=list(tensor.shape),
-        dtype=str(tensor.dtype)
+        tensor_data=tensor_to_bytes(tensor), shape=list(tensor.shape), dtype=str(tensor.dtype)
     )
     response = stub.SendTensor(tensor_message)
     return response
@@ -76,24 +77,36 @@ def send_tensor(stub, tensor: np.ndarray):
 
 def response_to_mlx_array(response):
     try:
-        tensor_data = response.tensor_data
-        shape = response.shape
-        dtype_str = response.dtype
-        dtype_map = {
-            'float32': np.float32,
-            'int32': np.int32,
-            'float64': np.float64,
-            'int64': np.int64,
-            "float16": np.float16,
-        }
-        np_dtype = dtype_map.get(dtype_str, np.float32)
-        np_array = np.frombuffer(tensor_data, dtype=np_dtype).reshape(shape)
-        mx_dtype = getattr(mx, dtype_str, mx.float32)
-        tensor = mx.array(np_array, dtype=mx_dtype)
+        tensor = bytes_to_tensor(response.tensor_data, response.dtype)
+        tensor = tensor.reshape(response.shape)
         return tensor
     except Exception as e:
         return None
-    
+
+
+def tensor_to_bytes(tensor):
+    """Convert an MLX tensor to bytes."""
+    return bytes(memoryview(tensor))
+
+
+def bytes_to_tensor(byte_data, dtype_str):
+    """Convert bytes to an MLX tensor of the specified dtype."""
+    dtype_map = {
+        "mlx.core.float32": (mx.float32, "f", 4),
+        "mlx.core.int32": (mx.int32, "i", 4),
+        "mlx.core.int64": (mx.int64, "q", 8),
+        "mlx.core.float16": (mx.float16, "e", 2),
+    }
+
+    if dtype_str not in dtype_map:
+        raise ValueError(f"Unsupported dtype: {dtype_str}")
+
+    mx_dtype, struct_format, bytes_per_element = dtype_map[dtype_str]
+    num_elements = len(byte_data) // bytes_per_element
+
+    values = list(struct.unpack(f"{num_elements}{struct_format}", byte_data))
+
+    return mx.array(values, dtype=mx_dtype)
 
 def create_generate_step_with_grpc(grpc_stubs: List):
     def generate_step(
@@ -105,7 +118,7 @@ def create_generate_step_with_grpc(grpc_stubs: List):
         top_p: float = 1.0,
         logit_bias: Optional[Dict[int, float]] = None,
     ) -> Generator[Tuple[mx.array, mx.array], None, None]:
-        
+
         for stub in grpc_stubs:
             reset_response = stub.ResetCache(mlx_tensor_pb2.ResetCacheRequest())
             print("ResetCache Response:", reset_response.message)
@@ -147,9 +160,9 @@ def create_generate_step_with_grpc(grpc_stubs: List):
                 output = output.astype(mx.float16)
 
             for stub in grpc_stubs:
-                response = send_tensor(stub, np.array(output))
+                response = send_tensor(stub, output)
                 output = response_to_mlx_array(response.tensor)
-            
+
             logits = output[:, -1, :]
             if repetition_penalty:
                 logits = apply_repetition_penalty(
