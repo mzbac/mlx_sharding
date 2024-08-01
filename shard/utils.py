@@ -8,6 +8,7 @@ from typing import Dict, Generator, Optional, Tuple, List
 from mlx_lm.models.base import KVCache
 from mlx_lm.sample_utils import top_p_sampling
 from mlx_lm.utils import apply_repetition_penalty, get_model_path
+import numpy as np
 from .grpc import mlx_tensor_pb2
 
 MODEL_REMAPPING = {
@@ -92,21 +93,20 @@ def tensor_to_bytes(tensor):
 def bytes_to_tensor(byte_data, dtype_str):
     """Convert bytes to an MLX tensor of the specified dtype."""
     dtype_map = {
-        "mlx.core.float32": (mx.float32, "f", 4),
-        "mlx.core.int32": (mx.int32, "i", 4),
-        "mlx.core.int64": (mx.int64, "q", 8),
-        "mlx.core.float16": (mx.float16, "e", 2),
+        "mlx.core.float32": np.float32,
+        "mlx.core.int32": np.int32,
+        "mlx.core.int64": np.int64,
+        "mlx.core.float16": np.float16,
     }
-
     if dtype_str not in dtype_map:
         raise ValueError(f"Unsupported dtype: {dtype_str}")
-
-    mx_dtype, struct_format, bytes_per_element = dtype_map[dtype_str]
-    num_elements = len(byte_data) // bytes_per_element
-
-    values = list(struct.unpack(f"{num_elements}{struct_format}", byte_data))
-
-    return mx.array(values, dtype=mx_dtype)
+    np_dtype = dtype_map.get(dtype_str, np.float32)
+    np_array = np.frombuffer(byte_data, dtype=np_dtype)
+    
+    mx_dtype_str = dtype_str.replace("mlx.core.", "")
+    mx_dtype = getattr(mx, mx_dtype_str, mx.float32)
+    
+    return mx.array(np_array, dtype=mx_dtype)
 
 def create_generate_step_with_grpc(grpc_stubs: List):
     def generate_step(
