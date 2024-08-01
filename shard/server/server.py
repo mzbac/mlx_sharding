@@ -1,9 +1,8 @@
 
 import grpc
 from concurrent import futures
-import numpy as np
 from ..grpc import mlx_tensor_pb2, mlx_tensor_pb2_grpc
-from ..utils import load_model
+from ..utils import bytes_to_tensor, load_model, tensor_to_bytes
 import mlx.core as mx
 from mlx_lm.models.base import KVCache
 
@@ -28,18 +27,7 @@ class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
     def SendTensor(self, request, context):
         try:
             print("Received tensor request")
-            dtype_str = request.dtype
-            dtype_map = {
-                'float32': np.float32,
-                'int32': np.int32,
-                'float64': np.float64,
-                'int64': np.int64,
-                "float16": np.float16,
-            }
-            np_dtype = dtype_map.get(dtype_str, np.float32)
-            np_array = np.frombuffer(request.tensor_data, dtype=np_dtype)
-            mx_dtype = getattr(mx, dtype_str, mx.float32)
-            tensor = mx.array(np_array, dtype=mx_dtype)
+            tensor = bytes_to_tensor(request.tensor_data, request.dtype)
             tensor = mx.reshape(tensor, request.shape)
             print(f"Received tensor with shape: {
                   tensor.shape} and dtype: {tensor.dtype}")
@@ -48,12 +36,11 @@ class MLXTensorServicer(mlx_tensor_pb2_grpc.MLXTensorServiceServicer):
                 processed_tensor = MODEL(tensor, cache=CACHE)
                 print(f"Processed tensor with shape: {
                       processed_tensor.shape} and dtype: {processed_tensor.dtype}")
-                processed_np = np.array(processed_tensor)
-                processed_bytes = processed_np.tobytes()
+                processed_bytes = tensor_to_bytes(processed_tensor)
                 response_tensor = mlx_tensor_pb2.Tensor(
                     tensor_data=processed_bytes,
-                    shape=list(processed_np.shape),
-                    dtype=str(processed_np.dtype)
+                    shape=list(processed_tensor.shape),
+                    dtype=str(processed_tensor.dtype)
                 )
                 return mlx_tensor_pb2.TensorResponse(
                     success=True,
